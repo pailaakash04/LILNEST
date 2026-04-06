@@ -5,7 +5,7 @@ const GardenCanvas = ({ wellnessData, onElementClick, selectedTheme }) => {
   const [animatingElements, setAnimatingElements] = useState(new Set());
   const [gardenElements, setGardenElements] = useState([]);
 
-  // Mock garden elements based on wellness progress
+  // Garden elements derived from wellness progress
   const mockGardenElements = [
     {
       id: 'tree-1',

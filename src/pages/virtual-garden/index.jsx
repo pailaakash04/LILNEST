@@ -30,6 +30,7 @@ const VirtualGarden = () => {
     weeklyProgress: [0, 0, 0, 0, 0, 0, 0],
     lastActivity: null,
     totalPoints: 0,
+    achievementsList: [],
   });
 
   const views = [
@@ -150,6 +151,7 @@ const VirtualGarden = () => {
           gardenLevel: data.stats.gardenLevel || 1,
           weeklyProgress: data.stats.weeklyProgress || prev.weeklyProgress,
           totalPoints: data.stats.totalPoints || 0,
+          achievementsList: Array.isArray(data.stats.achievementsList) ? data.stats.achievementsList : prev.achievementsList,
         }));
       }
     };
@@ -253,7 +255,7 @@ const VirtualGarden = () => {
 
             {activeView === 'achievements' && (
               <AchievementCards
-                achievements={wellnessData?.achievements}
+                achievements={wellnessData?.achievementsList}
                 onAchievementClick={handleAchievementClick}
                 onShareAchievement={handleShareAchievement}
               />
@@ -282,25 +284,25 @@ const VirtualGarden = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <Icon name="TreePine" size={16} className="text-success" />
-                      <span className="text-sm font-caption text-muted-foreground">Elements</span>
+                      <span className="text-sm font-caption text-muted-foreground">Achievements</span>
                     </div>
-                    <span className="text-sm font-mono text-foreground">5/8</span>
+                    <span className="text-sm font-mono text-foreground">{wellnessData.achievements || 0}</span>
                   </div>
                   
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <Icon name="TrendingUp" size={16} className="text-primary" />
-                      <span className="text-sm font-caption text-muted-foreground">Growth</span>
+                      <span className="text-sm font-caption text-muted-foreground">Total Points</span>
                     </div>
-                    <span className="text-sm font-mono text-foreground">85%</span>
+                    <span className="text-sm font-mono text-foreground">{wellnessData.totalPoints || 0}</span>
                   </div>
                   
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <Icon name="Star" size={16} className="text-accent" />
-                      <span className="text-sm font-caption text-muted-foreground">Health</span>
+                      <span className="text-sm font-caption text-muted-foreground">Garden Level</span>
                     </div>
-                    <span className="text-sm font-mono text-foreground">Flourishing</span>
+                    <span className="text-sm font-mono text-foreground">{wellnessData.gardenLevel || 1}</span>
                   </div>
                 </div>
               </div>
@@ -310,32 +312,7 @@ const VirtualGarden = () => {
                 <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
                   Recent Growth
                 </h3>
-                
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3 p-2 bg-success/10 rounded-lg">
-                    <Icon name="Sprout" size={16} className="text-success" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">New bloom appeared</p>
-                      <p className="text-xs font-caption text-muted-foreground">2 hours ago</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-3 p-2 bg-primary/10 rounded-lg">
-                    <Icon name="TreePine" size={16} className="text-primary" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">Focus Oak grew taller</p>
-                      <p className="text-xs font-caption text-muted-foreground">1 day ago</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-3 p-2 bg-accent/10 rounded-lg">
-                    <Icon name="Award" size={16} className="text-accent" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">Achievement unlocked</p>
-                      <p className="text-xs font-caption text-muted-foreground">3 days ago</p>
-                    </div>
-                  </div>
-                </div>
+                <div className="text-sm text-muted-foreground">No recent growth yet.</div>
               </div>
 
               {/* Quick Actions */}

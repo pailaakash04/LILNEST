@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
@@ -41,50 +41,6 @@ const ReviewCard = ({ review }) => (
     <div className="flex flex-wrap gap-2">
       {review.tags.map((tag, i) => (
         <span key={i} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold">
-      const defaultReviews = useMemo(() => [
-        {
-          id: 1,
-          name: 'Priya Sharma',
-          rating: 5,
-          date: '2 weeks ago',
-          verified: true,
-          comment: 'Dr. Aishwarya was a lifesaver! My baby had latching issues and she helped us resolve them in just one session. Very patient and knowledgeable.',
-          tags: ['Professional', 'Patient', 'Helpful']
-        },
-        {
-          id: 2,
-          name: 'Ananya Reddy',
-          rating: 5,
-          date: '1 month ago',
-          verified: true,
-          comment: 'Excellent support during my breastfeeding journey. She provided practical solutions and was always available for questions. Highly recommend!',
-          tags: ['Responsive', 'Expert', 'Supportive']
-        },
-        {
-          id: 3,
-          name: 'Neha Patel',
-          rating: 4,
-          date: '2 months ago',
-          verified: true,
-          comment: 'Very helpful and understanding. Gave me confidence to continue breastfeeding when I was about to give up.',
-          tags: ['Encouraging', 'Knowledgeable']
-        }
-      ], []);
-
-      const displayReviews = reviews.length ? reviews : defaultReviews;
-
-      if (!provider) {
-        return (
-          <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-            <Header />
-            <main className="pt-20 pb-10 px-4 max-w-6xl mx-auto">
-              <div className="bg-card rounded-2xl p-6 border border-border shadow-soft">
-                <div className="text-sm text-muted-foreground">Loading provider profile...</div>
-              </div>
-            </main>
-          </div>
-        );
-      }
           {tag}
         </span>
       ))}
@@ -368,6 +324,20 @@ const ServiceProviderProfile = () => {
       const data = await res.json();
       if (!mounted) return;
       if (data?.provider) {
+        const mappedReviews = (data.provider.reviews || []).map((review) => {
+          const createdAt = review.createdAt ? new Date(review.createdAt) : null;
+          return {
+            id: review.id,
+            name: review.user?.displayName || review.user?.email || 'Anonymous',
+            rating: review.rating || 0,
+            date: createdAt
+              ? createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : '',
+            verified: Boolean(review.user),
+            comment: review.comment || '',
+            tags: review.tags || [],
+          };
+        });
         setProvider({
           ...data.provider,
           experience: data.provider.experience || 0,
@@ -387,42 +357,25 @@ const ServiceProviderProfile = () => {
             type: service.sessionType || '—',
           })),
         });
-        setReviews(data.provider.reviews || []);
+        setReviews(mappedReviews);
       }
     };
     loadProvider();
     return () => { mounted = false; };
   }, [id]);
 
-  const defaultReviews = useMemo(() => [
-    {
-      id: 1,
-      name: 'Priya Sharma',
-      rating: 5,
-      date: '2 weeks ago',
-      verified: true,
-      comment: 'Dr. Aishwarya was a lifesaver! My baby had latching issues and she helped us resolve them in just one session. Very patient and knowledgeable.',
-      tags: ['Professional', 'Patient', 'Helpful']
-    },
-    {
-      id: 2,
-      name: 'Ananya Reddy',
-      rating: 5,
-      date: '1 month ago',
-      verified: true,
-      comment: 'Excellent support during my breastfeeding journey. She provided practical solutions and was always available for questions. Highly recommend!',
-      tags: ['Responsive', 'Expert', 'Supportive']
-    },
-    {
-      id: 3,
-      name: 'Neha Patel',
-      rating: 4,
-      date: '2 months ago',
-      verified: true,
-      comment: 'Very helpful and understanding. Gave me confidence to continue breastfeeding when I was about to give up.',
-      tags: ['Encouraging', 'Knowledgeable']
-    }
-  ], []);
+  if (!provider) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header />
+        <main className="pt-20 pb-10 px-4 max-w-6xl mx-auto">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-soft">
+            <div className="text-sm text-muted-foreground">Loading provider profile...</div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -604,9 +557,13 @@ const ServiceProviderProfile = () => {
                       </div>
 
                       {/* Reviews List */}
-                       {displayReviews.map((review) => (
-                        <ReviewCard key={review.id} review={review} />
-                      ))}
+                      {reviews.length > 0 ? (
+                        reviews.map((review) => (
+                          <ReviewCard key={review.id} review={review} />
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">No reviews yet.</div>
+                      )}
                     </div>
                   )}
                 </div>

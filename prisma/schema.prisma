@@ -120,6 +120,7 @@ model User {
   commentLikes  CommunityCommentLike[]
   timeCapsules  TimeCapsule[]
   bookings      MarketplaceBooking[]
+  marketplaceReviews MarketplaceReview[]
   emergencyContacts EmergencyContact[]
   prescriptions MedicinePrescription[]
   hydrationLogs HydrationLog[]
@@ -389,6 +390,7 @@ model GardenStat {
   meditationMinutes Int     @default(0) @map("meditation_minutes")
   totalSessions    Int      @default(0) @map("total_sessions")
   achievements     Int      @default(0)
+  achievementsList Json?    @map("achievements_list")
   gardenLevel      Int      @default(1) @map("garden_level")
   weeklyProgress   Json?    @map("weekly_progress")
   totalPoints      Int      @default(0) @map("total_points")

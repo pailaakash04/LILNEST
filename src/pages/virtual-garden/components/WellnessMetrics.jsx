@@ -87,6 +87,13 @@ const WellnessMetrics = ({ wellnessData, onMetricClick }) => {
     }
   };
 
+  const weeklyValues = Array.isArray(wellnessData?.weeklyProgress)
+    ? wellnessData.weeklyProgress
+    : [];
+  const weeklySeries = weeklyValues.length === 7 ? weeklyValues : Array(7).fill(0);
+  const maxWeekly = Math.max(1, ...weeklySeries);
+  const todayIndex = (new Date().getDay() + 6) % 7;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -151,8 +158,9 @@ const WellnessMetrics = ({ wellnessData, onMetricClick }) => {
         
         <div className="flex items-end justify-between space-x-2 h-24">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']?.map((day, index) => {
-            const height = Math.random() * 80 + 20; // Mock data
-            const isToday = index === 4; // Mock Thursday as today
+            const value = weeklySeries[index] || 0;
+            const height = Math.round((value / maxWeekly) * 100);
+            const isToday = index === todayIndex;
             
             return (
               <div key={day} className="flex flex-col items-center space-y-2 flex-1">

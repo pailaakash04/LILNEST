@@ -165,6 +165,18 @@ const resolveCategoryId = (category = '') => {
   return 'all';
 };
 
+const CATEGORY_OPTIONS = [
+  { id: 'all', label: 'All', icon: 'Grid3x3' },
+  { id: 'lactation', label: 'Lactation', icon: 'Droplet' },
+  { id: 'doula', label: 'Doula', icon: 'Heart' },
+  { id: 'sleep', label: 'Sleep', icon: 'Moon' },
+  { id: 'massage', label: 'Massage', icon: 'Sparkles' },
+  { id: 'nanny', label: 'Nanny', icon: 'Users' },
+  { id: 'nutrition', label: 'Nutrition', icon: 'UtensilsCrossed' },
+  { id: 'mental', label: 'Mental Health', icon: 'Brain' },
+  { id: 'physio', label: 'Physio', icon: 'Activity' },
+];
+
 const Marketplace = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -184,6 +196,8 @@ const Marketplace = () => {
   });
   const [showCategoryView, setShowCategoryView] = useState(false);
 
+  const categories = useMemo(() => CATEGORY_OPTIONS, []);
+
   useEffect(() => {
     let mounted = true;
     const loadProviders = async () => {
@@ -201,6 +215,14 @@ const Marketplace = () => {
   useEffect(() => {
     localStorage.setItem('favoriteProviders', JSON.stringify(favorites));
   }, [favorites]);
+
+  const toggleFavorite = (providerId) => {
+    setFavorites((prev) => (
+      prev.includes(providerId)
+        ? prev.filter((id) => id !== providerId)
+        : [...prev, providerId]
+    ));
+  };
 
   const allProviders = useMemo(() => {
     return providers.map((provider) => ({
@@ -220,58 +242,6 @@ const Marketplace = () => {
       available: true,
     }));
   }, [providers]);
-      categoryId: 'doula',
-      available: true
-    },
-    {
-      id: '8',
-      name: 'Dr. Anjali Kumar',
-      category: 'Lactation Specialist',
-      rating: 4.9,
-      reviews: 321,
-      distance: '2.8 km',
-      priceRange: '₹1,800 - ₹2,800',
-      verified: true,
-      featured: false,
-      online: false,
-      responseTime: '~5h',
-      tags: ['Hospital Visits', 'Emergencies', 'NICU Support'],
-      categoryId: 'lactation',
-      available: true
-    },
-    {
-      id: '9',
-      name: 'MindCare Clinic',
-      category: 'Perinatal Mental Health',
-      rating: 4.9,
-      reviews: 167,
-      distance: 'Online',
-      priceRange: '₹2,500 - ₹4,000',
-      verified: true,
-      featured: false,
-      online: true,
-      responseTime: '~2h',
-      tags: ['Licensed', 'PPD Specialist', 'Anxiety Support'],
-      categoryId: 'mental',
-      available: true
-    },
-    {
-      id: '10',
-      name: 'Active Kids Physio',
-      category: 'Pediatric Physiotherapist',
-      rating: 4.7,
-      reviews: 92,
-      distance: '5.2 km',
-      priceRange: '₹1,500 - ₹2,500',
-      verified: true,
-      featured: false,
-      online: false,
-      responseTime: '~4h',
-      tags: ['Child Development', 'Home Visits', 'Certified'],
-      categoryId: 'physio',
-      available: true
-    }
-  ], []);
 
   const filteredProviders = useMemo(() => {
     return allProviders

@@ -157,7 +157,7 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
     const token = await user.getIdToken();
     const unlockType = capsuleData.unlockType === 'custom' ? 'custom' : 'age';
 
-    await fetch(buildApiUrl('/api/time-capsules'), {
+    const res = await fetch(buildApiUrl('/api/time-capsules'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -174,6 +174,12 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
         },
       }),
     });
+
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data?.error || 'Failed to create capsule.');
+      return;
+    }
 
     if (onCreated) await onCreated();
     onClose();
@@ -412,6 +418,7 @@ const TimeCapsule = () => {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [myCapsules, setMyCapsules] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
   const mapCapsule = (capsule) => {
     const createdDate = capsule.createdAt ? new Date(capsule.createdAt) : new Date();
@@ -433,11 +440,10 @@ const TimeCapsule = () => {
       gradient: 'from-pink-400 to-rose-400',
       createdDate: createdLabel,
       unlockText,
+      unlockDate: capsule.unlockDate || null,
       status: capsule.status || 'locked',
       photos: 0,
-        const [searchQuery, setSearchQuery] = useState('');
-        const [myCapsules, setMyCapsules] = useState([]);
-      
+      videos: 0,
       audio: 0,
       mediaCount,
     };
@@ -445,12 +451,21 @@ const TimeCapsule = () => {
 
   const loadCapsules = async () => {
     if (!user) return;
-    const token = await user.getIdToken();
-    const res = await fetch(buildApiUrl('/api/time-capsules'), {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    setMyCapsules((data?.capsules || []).map(mapCapsule));
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl('/api/time-capsules'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to load capsules');
+      }
+      setLoadError('');
+      setMyCapsules((data?.capsules || []).map(mapCapsule));
+    } catch (error) {
+      setMyCapsules([]);
+      setLoadError(error?.message || 'Unable to load capsules.');
+    }
   };
 
   useEffect(() => {
@@ -532,6 +547,26 @@ const TimeCapsule = () => {
     );
   }, [myCapsules, searchQuery]);
 
+  const stats = useMemo(() => {
+    const total = myCapsules.length;
+    const locked = myCapsules.filter((c) => c.status === 'locked').length;
+    const mediaCount = myCapsules.reduce((sum, c) => sum + (c.mediaCount || 0), 0);
+    const nextUnlockDate = myCapsules
+      .map((c) => (c.unlockDate ? new Date(c.unlockDate) : null))
+      .filter((d) => d && d.getTime() >= Date.now())
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    const nextUnlock = nextUnlockDate
+      ? nextUnlockDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '—';
+
+    return {
+      total,
+      locked,
+      nextUnlock,
+      mediaCount,
+    };
+  }, [myCapsules]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <Header />
@@ -565,10 +600,10 @@ const TimeCapsule = () => {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { icon: 'Archive', label: 'Total Capsules', value: '6', color: 'from-blue-400 to-blue-500' },
-            { icon: 'Lock', label: 'Locked', value: '5', color: 'from-teal-400 to-cyan-500' },
-            { icon: 'Clock', label: 'Next Unlock', value: '1 Year', color: 'from-emerald-400 to-green-500' },
-            { icon: 'Image', label: 'Memories', value: '20+', color: 'from-pink-400 to-rose-400' }
+            { icon: 'Archive', label: 'Total Capsules', value: stats.total, color: 'from-blue-400 to-blue-500' },
+            { icon: 'Lock', label: 'Locked', value: stats.locked, color: 'from-teal-400 to-cyan-500' },
+            { icon: 'Clock', label: 'Next Unlock', value: stats.nextUnlock, color: 'from-emerald-400 to-green-500' },
+            { icon: 'Image', label: 'Memories', value: stats.mediaCount, color: 'from-pink-400 to-rose-400' }
           ].map((stat, i) => (
             <div key={i} className="bg-card rounded-2xl p-6 border border-border shadow-soft hover:shadow-lg transition-all">
               <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center mb-3`}>
@@ -617,6 +652,12 @@ const TimeCapsule = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-4 py-4 bg-card border-2 border-border focus:border-primary rounded-xl outline-none transition-all text-lg"
             />
+          </div>
+        )}
+
+        {activeTab === 'my-capsules' && loadError && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-700 rounded-xl p-4">
+            {loadError}
           </div>
         )}
 
@@ -764,6 +805,8 @@ const TimeCapsule = () => {
           setSelectedTemplate(null);
         }}
         template={selectedTemplate}
+        user={user}
+        onCreated={loadCapsules}
       />
     </div>
   );

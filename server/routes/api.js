@@ -325,7 +325,7 @@ router.get('/marketplace/providers/:id', async (req, res) => {
     const { id } = req.params;
     const provider = await prisma.marketplaceProvider.findUnique({
       where: { id },
-      include: { services: true, reviews: true },
+      include: { services: true, reviews: { include: { user: true } } },
     });
 
     if (!provider) {
@@ -545,6 +545,7 @@ router.put('/garden-stats', requireAuth, async (req, res) => {
         meditationMinutes: payload.meditationMinutes,
         totalSessions: payload.totalSessions,
         achievements: payload.achievements,
+        achievementsList: payload.achievementsList,
         gardenLevel: payload.gardenLevel,
         weeklyProgress: payload.weeklyProgress,
         totalPoints: payload.totalPoints,
@@ -556,6 +557,7 @@ router.put('/garden-stats', requireAuth, async (req, res) => {
         meditationMinutes: payload.meditationMinutes || 0,
         totalSessions: payload.totalSessions || 0,
         achievements: payload.achievements || 0,
+        achievementsList: payload.achievementsList || [],
         gardenLevel: payload.gardenLevel || 1,
         weeklyProgress: payload.weeklyProgress || [],
         totalPoints: payload.totalPoints || 0,

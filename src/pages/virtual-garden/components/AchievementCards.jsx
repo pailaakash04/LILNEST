@@ -5,104 +5,7 @@ import Button from '../../../components/ui/Button';
 const AchievementCards = ({ achievements, onAchievementClick, onShareAchievement }) => {
   const [filter, setFilter] = useState('all');
 
-  const mockAchievements = [
-    {
-      id: 'first-focus',
-      title: 'First Focus',
-      description: 'Complete your first focus session',
-      icon: 'Timer',
-      category: 'focus',
-      unlocked: true,
-      unlockedDate: '2025-01-10',
-      rarity: 'common',
-      points: 10,
-      gardenReward: 'Sprouting Seed'
-    },
-    {
-      id: 'week-warrior',
-      title: 'Week Warrior',
-      description: 'Maintain a 7-day focus streak',
-      icon: 'Flame',
-      category: 'streak',
-      unlocked: true,
-      unlockedDate: '2025-01-12',
-      rarity: 'rare',
-      points: 50,
-      gardenReward: 'Focus Oak Tree'
-    },
-    {
-      id: 'meditation-master',
-      title: 'Meditation Master',
-      description: 'Complete 100 minutes of meditation',
-      icon: 'Brain',
-      category: 'meditation',
-      unlocked: true,
-      unlockedDate: '2025-01-11',
-      rarity: 'epic',
-      points: 100,
-      gardenReward: 'Mindfulness Bloom'
-    },
-    {
-      id: 'break-buddy',
-      title: 'Break Buddy',
-      description: 'Take 50 mindful breaks',
-      icon: 'Coffee',
-      category: 'breaks',
-      unlocked: true,
-      unlockedDate: '2025-01-09',
-      rarity: 'uncommon',
-      points: 25,
-      gardenReward: 'Break Berry Bush'
-    },
-    {
-      id: 'zen-master',
-      title: 'Zen Master',
-      description: 'Reach garden level 10',
-      icon: 'Crown',
-      category: 'garden',
-      unlocked: false,
-      progress: 0.8,
-      rarity: 'legendary',
-      points: 200,
-      gardenReward: 'Golden Lotus'
-    },
-    {
-      id: 'consistency-king',
-      title: 'Consistency King',
-      description: 'Maintain 30-day wellness streak',
-      icon: 'Trophy',
-      category: 'streak',
-      unlocked: false,
-      progress: 0.4,
-      rarity: 'legendary',
-      points: 300,
-      gardenReward: 'Eternal Fountain'
-    },
-    {
-      id: 'early-bird',
-      title: 'Early Bird',
-      description: 'Complete 10 morning sessions',
-      icon: 'Sunrise',
-      category: 'focus',
-      unlocked: false,
-      progress: 0.6,
-      rarity: 'rare',
-      points: 75,
-      gardenReward: 'Dawn Flower'
-    },
-    {
-      id: 'night-owl',
-      title: 'Night Owl',
-      description: 'Complete 10 evening sessions',
-      icon: 'Moon',
-      category: 'focus',
-      unlocked: false,
-      progress: 0.3,
-      rarity: 'rare',
-      points: 75,
-      gardenReward: 'Moonlight Vine'
-    }
-  ];
+  const list = Array.isArray(achievements) ? achievements : [];
 
   const categories = [
     { id: 'all', label: 'All', icon: 'Grid3X3' },
@@ -135,12 +38,12 @@ const AchievementCards = ({ achievements, onAchievementClick, onShareAchievement
     }
   };
 
-  const filteredAchievements = filter === 'all' 
-    ? mockAchievements 
-    : mockAchievements?.filter(achievement => achievement?.category === filter);
+  const filteredAchievements = filter === 'all'
+    ? list
+    : list.filter((achievement) => achievement?.category === filter);
 
-  const unlockedCount = mockAchievements?.filter(a => a?.unlocked)?.length;
-  const totalPoints = mockAchievements?.filter(a => a?.unlocked)?.reduce((sum, a) => sum + a?.points, 0);
+  const unlockedCount = list.filter((a) => a?.unlocked)?.length;
+  const totalPoints = list.filter((a) => a?.unlocked)?.reduce((sum, a) => sum + (a?.points || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -151,7 +54,7 @@ const AchievementCards = ({ achievements, onAchievementClick, onShareAchievement
             Achievements
           </h3>
           <p className="text-sm font-caption text-muted-foreground">
-            {unlockedCount}/{mockAchievements?.length} unlocked • {totalPoints} points
+            {unlockedCount}/{list.length} unlocked • {totalPoints} points
           </p>
         </div>
         
@@ -180,17 +83,20 @@ const AchievementCards = ({ achievements, onAchievementClick, onShareAchievement
         ))}
       </div>
       {/* Achievement Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredAchievements?.map((achievement) => (
-          <div
-            key={achievement?.id}
-            onClick={() => onAchievementClick(achievement)}
-            className={`relative p-4 rounded-xl border-2 cursor-pointer organic-hover transition-all duration-300 ${
-              achievement?.unlocked 
-                ? `${getRarityColor(achievement?.rarity)} ${getRarityBg(achievement?.rarity)} hover:shadow-organic`
-                : 'border-muted bg-muted/5 opacity-60 hover:opacity-80'
-            }`}
-          >
+      {list.length === 0 ? (
+        <div className="text-sm text-muted-foreground">No achievements yet.</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredAchievements.map((achievement) => (
+            <div
+              key={achievement?.id}
+              onClick={() => onAchievementClick(achievement)}
+              className={`relative p-4 rounded-xl border-2 cursor-pointer organic-hover transition-all duration-300 ${
+                achievement?.unlocked
+                  ? `${getRarityColor(achievement?.rarity)} ${getRarityBg(achievement?.rarity)} hover:shadow-organic`
+                  : 'border-muted bg-muted/5 opacity-60 hover:opacity-80'
+              }`}
+            >
             {/* Rarity Badge */}
             <div className={`absolute top-2 right-2 px-2 py-1 rounded-lg text-xs font-caption capitalize ${
               achievement?.unlocked ? getRarityBg(achievement?.rarity) : 'bg-muted/20'
@@ -298,9 +204,10 @@ const AchievementCards = ({ achievements, onAchievementClick, onShareAchievement
                 <div className="absolute top-2 left-2 w-2 h-2 bg-accent rounded-full animate-gentle-pulse"></div>
               </div>
             )}
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
       {/* Empty State */}
       {filteredAchievements?.length === 0 && (
         <div className="text-center py-12">

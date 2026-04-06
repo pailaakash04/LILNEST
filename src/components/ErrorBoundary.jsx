@@ -4,17 +4,18 @@ import Icon from "./AppIcon";
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true };
+    return { hasError: true, error };
   }
 
   componentDidCatch(error, errorInfo) {
+    this.setState({ errorInfo });
     error.__ErrorBoundary = true;
     window.__COMPONENT_ERROR__?.(error, errorInfo);
-    // console.log("Error caught by ErrorBoundary:", error, errorInfo);
+    console.error("Error caught by ErrorBoundary:", error, errorInfo);
   }
 
   render() {
@@ -45,6 +46,18 @@ class ErrorBoundary extends React.Component {
                 Back
               </button>
             </div>
+            {this.state?.error && (
+              <div className="mt-6 text-left text-xs text-neutral-600 bg-white border border-neutral-200 rounded p-3 overflow-auto max-h-56">
+                <div className="font-semibold mb-2">Debug details</div>
+                <pre className="whitespace-pre-wrap">{String(this.state.error?.message || this.state.error)}</pre>
+                {this.state?.error?.stack && (
+                  <pre className="whitespace-pre-wrap mt-2">{String(this.state.error.stack)}</pre>
+                )}
+                {this.state?.errorInfo?.componentStack && (
+                  <pre className="whitespace-pre-wrap mt-2">{this.state.errorInfo.componentStack}</pre>
+                )}
+              </div>
+            )}
           </div >
         </div >
       );

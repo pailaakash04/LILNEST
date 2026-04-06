@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
@@ -176,6 +176,8 @@ const Community = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [posts, setPosts] = useState([]);
+  const [providers, setProviders] = useState([]);
+  const [loadError, setLoadError] = useState('');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [tags, setTags] = useState('');
@@ -203,12 +205,33 @@ const Community = () => {
           };
         });
         setPosts(list);
+        setLoadError('');
       } catch {
-        if (mounted) setPosts([]);
+        if (mounted) {
+          setPosts([]);
+          setLoadError('Unable to load community posts.');
+        }
       }
     };
 
     loadPosts();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadProviders = async () => {
+      try {
+        const res = await fetch(buildApiUrl('/api/marketplace/providers'));
+        const data = await res.json();
+        if (!mounted) return;
+        setProviders(data?.providers || []);
+      } catch {
+        if (mounted) setProviders([]);
+      }
+    };
+
+    loadProviders();
     return () => { mounted = false; };
   }, []);
 
@@ -258,22 +281,53 @@ const Community = () => {
     setPosts(list);
   };
 
-  const categories = [
-    { name: 'Pregnancy', count: 234, icon: 'Baby' },
-    { name: 'Postpartum', count: 156, icon: 'Heart' },
-    { name: 'Breastfeeding', count: 189, icon: 'Droplet' },
-    { name: 'Baby Sleep', count: 145, icon: 'Moon' },
-    { name: 'Nutrition', count: 98, icon: 'UtensilsCrossed' },
-    { name: 'Mental Health', count: 167, icon: 'Sparkles' },
-    { name: 'Working Parents', count: 123, icon: 'Briefcase' },
-    { name: 'Local Groups', count: 89, icon: 'MapPin' }
-  ];
+  const categories = useMemo(() => {
+    const counts = {};
+    posts.forEach((post) => {
+      const name = post.category || 'General';
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, count]) => ({ name, count }));
+  }, [posts]);
 
-  const expertProviders = [
-    { name: 'Dr. Sarah Johnson', specialty: 'Lactation Consultant', rating: 4.9, reviews: 234, image: '' },
-    { name: 'Dr. Michael Chen', specialty: 'Pediatrician', rating: 4.8, reviews: 189, image: '' },
-    { name: 'Emily Rodriguez', specialty: 'Doula & Birth Coach', rating: 5.0, reviews: 156, image: '' }
-  ];
+  const expertProviders = useMemo(() => {
+    return [...providers]
+      .sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0))
+      .slice(0, 3)
+      .map((provider) => ({
+        name: provider.name,
+        specialty: provider.category,
+        rating: Number(provider.rating) || 0,
+        reviews: provider.reviewsCount || 0,
+        image: '',
+      }));
+  }, [providers]);
+
+  const trendingTopics = useMemo(() => {
+    const counts = {};
+    posts.forEach((post) => {
+      (post.tags || []).forEach((tag) => {
+        const key = String(tag || '').trim();
+        if (!key) return;
+        counts[key] = (counts[key] || 0) + 1;
+      });
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([tag]) => tag);
+  }, [posts]);
+
+  const communityStats = useMemo(() => {
+    const totalPosts = posts.length;
+    const totalReplies = posts.reduce((sum, post) => sum + (post.replies || 0), 0);
+    const weekAgo = Date.now() - 7 * 86400000;
+    const newThisWeek = posts.filter((post) => {
+      const created = post.createdAt ? new Date(post.createdAt).getTime() : 0;
+      return created >= weekAgo;
+    }).length;
+    return { totalPosts, totalReplies, newThisWeek };
+  }, [posts]);
 
   const handleSaveToTimeCapsule = (thread) => {
     // Integration with Time Capsule feature
@@ -343,7 +397,7 @@ const Community = () => {
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink-500/10 text-pink-600 text-sm font-medium mb-4">
             <Icon name="Users" className="w-4 h-4" />
-            Join 10,000+ Parents in Our Community
+            Join parents in our community
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-3">
             Community Forum
@@ -375,6 +429,12 @@ const Community = () => {
           </Button>
         </div>
 
+        {loadError && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-700 rounded-xl p-4 mb-6">
+            {loadError}
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {[
@@ -404,9 +464,15 @@ const Community = () => {
           <div className="lg:col-span-2 space-y-6">
             {activeTab === 'categories' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {categories.map((cat) => (
-                  <CategoryBadge key={cat.name} category={cat.name} count={cat.count} />
-                ))}
+                {categories.length > 0 ? (
+                  categories.map((cat) => (
+                    <CategoryBadge key={cat.name} category={cat.name} count={cat.count} />
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-12 text-muted-foreground">
+                    No categories yet. Start the first discussion!
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -445,9 +511,13 @@ const Community = () => {
                 Connect with verified maternal care professionals
               </p>
               <div className="space-y-3">
-                {expertProviders.slice(0, 2).map((expert) => (
-                  <ExpertCard key={expert.name} {...expert} />
-                ))}
+                {expertProviders.length > 0 ? (
+                  expertProviders.slice(0, 2).map((expert) => (
+                    <ExpertCard key={expert.name} {...expert} />
+                  ))
+                ) : (
+                  <div className="text-sm text-muted-foreground">No providers available yet.</div>
+                )}
               </div>
               <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => navigate('/marketplace')}>
                 View All Experts
@@ -461,14 +531,18 @@ const Community = () => {
                 <h3 className="font-semibold text-foreground">Trending Topics</h3>
               </div>
               <div className="space-y-3">
-                {['First Trimester Tips', 'Baby Sleep Training', 'Breastfeeding Support', 'Postpartum Recovery', 'Newborn Care'].map((topic) => (
-                  <button
-                    key={topic}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
-                  >
-                    #{topic.replace(/\s+/g, '')}
-                  </button>
-                ))}
+                {trendingTopics.length > 0 ? (
+                  trendingTopics.map((topic) => (
+                    <button
+                      key={topic}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm"
+                    >
+                      #{String(topic).replace(/\s+/g, '')}
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-sm text-muted-foreground">No trending topics yet.</div>
+                )}
               </div>
             </div>
 
@@ -514,16 +588,16 @@ const Community = () => {
               <h3 className="font-semibold text-foreground mb-4">Community Stats</h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Total Members</span>
-                  <span className="text-sm font-semibold">10,234</span>
+                  <span className="text-sm text-muted-foreground">Total Discussions</span>
+                  <span className="text-sm font-semibold">{communityStats.totalPosts}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Active Today</span>
-                  <span className="text-sm font-semibold">1,456</span>
+                  <span className="text-sm text-muted-foreground">Replies</span>
+                  <span className="text-sm font-semibold">{communityStats.totalReplies}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Discussions</span>
-                  <span className="text-sm font-semibold">3,891</span>
+                  <span className="text-sm text-muted-foreground">New This Week</span>
+                  <span className="text-sm font-semibold">{communityStats.newThisWeek}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Expert Answers</span>

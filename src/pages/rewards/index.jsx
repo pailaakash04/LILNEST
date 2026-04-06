@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../contexts/AuthContext';
-import { ensureSummary, getSummary, addPoints, getChallenges, addChallenge, grantBadge } from '../../utils/rewardsStore';
+import { ensureSummary, getSummary, addPoints, getChallenges, grantBadge } from '../../utils/rewardsStore';
 
 const StatCard = ({ title, value, note }) => (
   <div className="bg-card rounded-xl p-4 shadow-soft border border-border">
@@ -34,12 +34,7 @@ const Rewards = () => {
       const s = await getSummary(user);
       setSummary(s);
       const list = await getChallenges(user);
-      if (!list.length) {
-        await addChallenge(user, { name: '7-Day Wellness', goal: 7, progress: 0, xp: 500 });
-        await addChallenge(user, { name: 'Hydration Month', goal: 30, progress: 0, xp: 1000 });
-      }
-      const fresh = await getChallenges(user);
-      setChallenges(fresh);
+      setChallenges(list);
     })();
   }, [user]);
 
@@ -78,16 +73,20 @@ const Rewards = () => {
           <div className="bg-card rounded-xl p-4 border border-border shadow-soft">
             <div className="text-lg font-semibold mb-2">Active Challenges</div>
             <div className="space-y-3">
-              {challenges.map((c) => (
-                <div key={c.id} className="p-3 rounded-lg bg-muted">
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium">{c.name}</div>
-                    <div className="text-sm text-muted-foreground">+{c.xp} XP</div>
+              {challenges.length > 0 ? (
+                challenges.map((c) => (
+                  <div key={c.id} className="p-3 rounded-lg bg-muted">
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium">{c.name}</div>
+                      <div className="text-sm text-muted-foreground">+{c.xp} XP</div>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">{c.progress || 0}/{c.goal}</div>
+                    <ProgressBar value={c.progress || 0} max={c.goal || 1} />
                   </div>
-                  <div className="mt-2 text-xs text-muted-foreground">{c.progress || 0}/{c.goal}</div>
-                  <ProgressBar value={c.progress || 0} max={c.goal || 1} />
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="text-sm text-muted-foreground">No challenges yet.</div>
+              )}
             </div>
           </div>
           <div className="bg-card rounded-xl p-4 border border-border shadow-soft">

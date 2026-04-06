@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
@@ -7,6 +7,82 @@ import TimerControls from './components/TimerControls';
 import SessionConfiguration from './components/SessionConfiguration';
 import ProductivityInsights from './components/ProductivityInsights';
 import WebsiteBlocker from './components/WebsiteBlocker';
+
+const STATS_KEY = 'pomodoroDailyStats';
+const BLOCKED_SITES_KEY = 'pomodoroBlockedSites';
+
+const getDateKey = (date = new Date()) => date.toISOString().slice(0, 10);
+
+const loadDailyStats = () => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(STATS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveDailyStats = (stats) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  } catch {
+    // no-op
+  }
+};
+
+const loadBlockedSites = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(BLOCKED_SITES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveBlockedSites = (sites) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(BLOCKED_SITES_KEY, JSON.stringify(sites));
+  } catch {
+    // no-op
+  }
+};
+
+const buildWeeklyData = (stats) => {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const today = new Date();
+  const result = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = getDateKey(d);
+    const label = days[(d.getDay() + 6) % 7];
+    const record = stats[key] || { focusMinutes: 0 };
+    result.push({ day: label, focusMinutes: record.focusMinutes || 0 });
+  }
+  return result;
+};
+
+const calculateStreak = (stats) => {
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i += 1) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = getDateKey(d);
+    const sessions = stats[key]?.sessions || 0;
+    if (sessions > 0) {
+      streak += 1;
+    } else {
+      break;
+    }
+  }
+  return streak;
+};
 
 const PomodoroTimer = () => {
   const navigate = useNavigate();
@@ -17,7 +93,6 @@ const PomodoroTimer = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [currentPhase, setCurrentPhase] = useState('focus'); // 'focus', 'shortBreak', 'longBreak'
   const [sessionCount, setSessionCount] = useState(1);
-  const [completedSessions, setCompletedSessions] = useState(0);
 
   // Settings State
   const [settings, setSettings] = useState({
@@ -30,29 +105,38 @@ const PomodoroTimer = () => {
   // UI State
   const [activeTab, setActiveTab] = useState('timer');
   const [isWebsiteBlockerEnabled, setIsWebsiteBlockerEnabled] = useState(false);
-  const [blockedSites, setBlockedSites] = useState([
-    { url: 'facebook.com', category: 'Social Media', isActive: true },
-    { url: 'twitter.com', category: 'Social Media', isActive: true },
-    { url: 'youtube.com', category: 'Entertainment', isActive: true }
-  ]);
+  const [blockedSites, setBlockedSites] = useState(() => loadBlockedSites());
+  const [dailyStats, setDailyStats] = useState(() => loadDailyStats());
 
-  // Mock Data
-  const todayStats = {
-    completedSessions: 6,
-    totalFocusTime: 125, // minutes
-    breaksCompleted: 5,
-    currentStreak: 7
-  };
+  const todayKey = getDateKey();
+  const todayRecord = dailyStats[todayKey] || { sessions: 0, focusMinutes: 0, breaks: 0 };
+  const todayStats = useMemo(() => ({
+    completedSessions: todayRecord.sessions || 0,
+    totalFocusTime: todayRecord.focusMinutes || 0,
+    breaksCompleted: todayRecord.breaks || 0,
+    currentStreak: calculateStreak(dailyStats),
+  }), [dailyStats, todayRecord.sessions, todayRecord.focusMinutes, todayRecord.breaks]);
 
-  const weeklyData = [
-    { day: 'Mon', focusMinutes: 180 },
-    { day: 'Tue', focusMinutes: 240 },
-    { day: 'Wed', focusMinutes: 160 },
-    { day: 'Thu', focusMinutes: 200 },
-    { day: 'Fri', focusMinutes: 220 },
-    { day: 'Sat', focusMinutes: 120 },
-    { day: 'Sun', focusMinutes: 90 }
-  ];
+  const weeklyData = useMemo(() => buildWeeklyData(dailyStats), [dailyStats]);
+
+  useEffect(() => {
+    saveBlockedSites(blockedSites);
+  }, [blockedSites]);
+
+  const updateDailyStats = useCallback((delta) => {
+    setDailyStats((prev) => {
+      const key = getDateKey();
+      const current = prev[key] || { sessions: 0, focusMinutes: 0, breaks: 0 };
+      const updated = {
+        sessions: current.sessions + (delta.sessions || 0),
+        focusMinutes: current.focusMinutes + (delta.focusMinutes || 0),
+        breaks: current.breaks + (delta.breaks || 0),
+      };
+      const next = { ...prev, [key]: updated };
+      saveDailyStats(next);
+      return next;
+    });
+  }, []);
 
   // Timer Logic
   useEffect(() => {
@@ -76,7 +160,10 @@ const PomodoroTimer = () => {
     setIsPaused(false);
     
     if (currentPhase === 'focus') {
-      setCompletedSessions(prev => prev + 1);
+      updateDailyStats({
+        sessions: 1,
+        focusMinutes: Math.round(totalTime / 60),
+      });
       
       // Determine next phase
       if (sessionCount % settings?.sessionsUntilLongBreak === 0) {
@@ -89,6 +176,7 @@ const PomodoroTimer = () => {
         setTimeRemaining(settings?.shortBreakDuration * 60);
       }
     } else {
+      updateDailyStats({ breaks: 1 });
       // Break completed, start next focus session
       setCurrentPhase('focus');
       setSessionCount(prev => prev + 1);
@@ -188,13 +276,13 @@ const PomodoroTimer = () => {
               <div className="flex items-center space-x-2">
                 <Icon name="Target" size={16} className="text-primary" />
                 <span className="text-sm font-mono text-foreground">
-                  {completedSessions} sessions today
+                  {todayStats.completedSessions} sessions today
                 </span>
               </div>
               <div className="flex items-center space-x-2">
                 <Icon name="Clock" size={16} className="text-secondary" />
                 <span className="text-sm font-mono text-foreground">
-                  {Math.round(completedSessions * settings?.focusDuration)}m focused
+                  {Math.round(todayStats.totalFocusTime)}m focused
                 </span>
               </div>
             </div>
@@ -266,7 +354,7 @@ const PomodoroTimer = () => {
                       Completed Today
                     </span>
                     <span className="text-lg font-mono font-bold text-primary">
-                      {completedSessions}
+                      {todayStats.completedSessions}
                     </span>
                   </div>
                   

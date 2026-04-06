@@ -7,16 +7,6 @@ const WebsiteBlocker = ({ isEnabled, onToggle, blockedSites, onSitesChange }) =>
   const [newSite, setNewSite] = useState('');
   const [tempOverride, setTempOverride] = useState(null);
 
-  const defaultBlockedSites = [
-    { url: 'facebook.com', category: 'Social Media', isActive: true },
-    { url: 'twitter.com', category: 'Social Media', isActive: true },
-    { url: 'instagram.com', category: 'Social Media', isActive: false },
-    { url: 'youtube.com', category: 'Entertainment', isActive: true },
-    { url: 'reddit.com', category: 'Social Media', isActive: false },
-    { url: 'tiktok.com', category: 'Entertainment', isActive: true },
-    { url: 'netflix.com', category: 'Entertainment', isActive: false }
-  ];
-
   const handleAddSite = () => {
     if (newSite?.trim()) {
       const site = {
