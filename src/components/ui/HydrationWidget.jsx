@@ -1,25 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import Button from './Button';
+import { buildApiUrl } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const todayKey = () => new Date().toISOString().slice(0,10);
 
 const HydrationWidget = ({ goalMl = 2000 }) => {
+  const { user } = useAuth();
   const [date, setDate] = useState(todayKey());
   const [ml, setMl] = useState(0);
   const [remind, setRemind] = useState(false);
   const [intervalId, setIntervalId] = useState(null);
 
   useEffect(() => {
-    const key = `lilnest-hydration-${todayKey()}`;
-    const saved = localStorage.getItem(key);
-    if (saved) setMl(parseInt(saved, 10) || 0);
     setDate(todayKey());
   }, []);
 
   useEffect(() => {
-    const key = `lilnest-hydration-${date}`;
-    localStorage.setItem(key, String(ml));
-  }, [ml, date]);
+    let mounted = true;
+    const load = async () => {
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl(`/api/hydration?date=${date}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (mounted) setMl(Number(data?.total || 0));
+    };
+    load();
+    return () => { mounted = false; };
+  }, [user, date]);
 
   useEffect(() => {
     if (remind) {
@@ -37,6 +47,37 @@ const HydrationWidget = ({ goalMl = 2000 }) => {
   }, [remind]);
 
   const pct = Math.min(100, Math.round((ml / goalMl) * 100));
+
+  const addAmount = async (amount) => {
+    const next = ml + amount;
+    setMl(next);
+    if (!user) return;
+    const token = await user.getIdToken();
+    await fetch(buildApiUrl('/api/hydration'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ amountMl: amount }),
+    });
+  };
+
+  const resetAmount = async () => {
+    if (ml === 0) return;
+    const delta = -ml;
+    setMl(0);
+    if (!user) return;
+    const token = await user.getIdToken();
+    await fetch(buildApiUrl('/api/hydration'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ amountMl: delta }),
+    });
+  };
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 shadow-soft">
@@ -57,11 +98,11 @@ const HydrationWidget = ({ goalMl = 2000 }) => {
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {[150, 200, 250, 300].map((v) => (
-          <Button key={v} size="xs" variant="secondary" onClick={() => setMl((x) => x + v)}>
+          <Button key={v} size="xs" variant="secondary" onClick={() => addAmount(v)}>
             +{v} ml
           </Button>
         ))}
-        <Button size="xs" variant="ghost" onClick={() => setMl(0)}>Reset</Button>
+        <Button size="xs" variant="ghost" onClick={resetAmount}>Reset</Button>
       </div>
     </div>
   );

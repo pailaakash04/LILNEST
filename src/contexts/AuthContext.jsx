@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth, googleProvider, db } from '../firebase/config';
+import { auth, googleProvider } from '../firebase/config';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, signInWithPopup, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { buildApiUrl } from '../utils/api';
 
 const AuthContext = createContext();
 
@@ -17,14 +17,16 @@ export const AuthProvider = ({ children }) => {
       setUser(u);
       if (u) {
         try {
-          const userRef = doc(db, 'users', u.uid);
-          const snap = await getDoc(userRef);
-          if (!snap.exists()) {
-            await setDoc(userRef, { email: u.email || null, role: 'mother', createdAt: serverTimestamp() });
-            setRole('mother');
-          } else {
-            setRole(snap.data()?.role || 'mother');
-          }
+          const token = await u.getIdToken();
+          const res = await fetch(buildApiUrl('/api/me'), {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          const data = await res.json();
+          setRole(data?.role || 'mother');
         } catch {
           setRole('mother');
         }

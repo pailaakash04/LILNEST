@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import Icon from '../../components/AppIcon';
+import { buildApiUrl } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Review Card Component
 const ReviewCard = ({ review }) => (
@@ -39,6 +41,50 @@ const ReviewCard = ({ review }) => (
     <div className="flex flex-wrap gap-2">
       {review.tags.map((tag, i) => (
         <span key={i} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold">
+      const defaultReviews = useMemo(() => [
+        {
+          id: 1,
+          name: 'Priya Sharma',
+          rating: 5,
+          date: '2 weeks ago',
+          verified: true,
+          comment: 'Dr. Aishwarya was a lifesaver! My baby had latching issues and she helped us resolve them in just one session. Very patient and knowledgeable.',
+          tags: ['Professional', 'Patient', 'Helpful']
+        },
+        {
+          id: 2,
+          name: 'Ananya Reddy',
+          rating: 5,
+          date: '1 month ago',
+          verified: true,
+          comment: 'Excellent support during my breastfeeding journey. She provided practical solutions and was always available for questions. Highly recommend!',
+          tags: ['Responsive', 'Expert', 'Supportive']
+        },
+        {
+          id: 3,
+          name: 'Neha Patel',
+          rating: 4,
+          date: '2 months ago',
+          verified: true,
+          comment: 'Very helpful and understanding. Gave me confidence to continue breastfeeding when I was about to give up.',
+          tags: ['Encouraging', 'Knowledgeable']
+        }
+      ], []);
+
+      const displayReviews = reviews.length ? reviews : defaultReviews;
+
+      if (!provider) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+            <Header />
+            <main className="pt-20 pb-10 px-4 max-w-6xl mx-auto">
+              <div className="bg-card rounded-2xl p-6 border border-border shadow-soft">
+                <div className="text-sm text-muted-foreground">Loading provider profile...</div>
+              </div>
+            </main>
+          </div>
+        );
+      }
           {tag}
         </span>
       ))}
@@ -47,7 +93,7 @@ const ReviewCard = ({ review }) => (
 );
 
 // Booking Modal Component
-const BookingModal = ({ isOpen, onClose, provider }) => {
+const BookingModal = ({ isOpen, onClose, provider, user }) => {
   const [step, setStep] = useState(1);
   const [bookingData, setBookingData] = useState({
     date: '',
@@ -67,8 +113,30 @@ const BookingModal = ({ isOpen, onClose, provider }) => {
 
   const timeSlots = ['09:00 AM', '10:30 AM', '12:00 PM', '02:00 PM', '04:00 PM', '06:00 PM'];
 
-  const handleConfirmBooking = () => {
-    // In production, save to Firebase and send confirmation
+  const handleConfirmBooking = async () => {
+    if (!user) {
+      alert('Please log in to book a consultation.');
+      return;
+    }
+
+    const token = await user.getIdToken();
+    await fetch(buildApiUrl('/api/marketplace/bookings'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        providerId: provider.id,
+        sessionType: bookingData.sessionType,
+        scheduledAt: `${bookingData.date}T${bookingData.time}`,
+        notes: bookingData.notes,
+        paymentMethod: bookingData.paymentMethod,
+        amount: Number(sessionTypes.find((t) => t.id === bookingData.sessionType)?.price?.replace(/[^\d.]/g, '') || 0),
+        currency: 'INR',
+      }),
+    });
+
     alert('Booking confirmed! Check your email for details.');
     onClose();
     setStep(1);
@@ -287,57 +355,46 @@ const BookingModal = ({ isOpen, onClose, provider }) => {
 const ServiceProviderProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [activeTab, setActiveTab] = useState('about');
+  const [provider, setProvider] = useState(null);
+  const [reviews, setReviews] = useState([]);
 
-  // Mock provider data - In production, fetch from Firebase using id
-  const provider = useMemo(() => ({
-    id: id,
-    name: 'Dr. Aishwarya Menon',
-    category: 'Lactation Consultant',
-    title: 'IBCLC Certified Lactation Consultant',
-    rating: 4.9,
-    reviews: 234,
-    experience: 12,
-    verified: true,
-    online: true,
-    featured: true,
-    languages: ['English', 'Hindi', 'Malayalam'],
-    location: 'Mumbai, Maharashtra',
-    distance: '1.6 km',
-    responseTime: '~2h',
-    about: 'Experienced IBCLC certified lactation consultant with over 12 years of helping mothers establish successful breastfeeding. Specializing in early breastfeeding challenges, tongue-tie assessment, and returning to work strategies.',
-    expertise: [
-      'Latching difficulties',
-      'Low milk supply',
-      'Tongue-tie assessment',
-      'Pumping strategies',
-      'Returning to work',
-      'Weaning support'
-    ],
-    certifications: [
-      'IBCLC (International Board Certified Lactation Consultant)',
-      'Certified Breastfeeding Counselor',
-      'Pediatric First Aid & CPR',
-      'Child Development Specialist'
-    ],
-    services: [
-      { name: 'Initial Consultation', duration: '60 min', price: '₹2,500', type: 'Virtual/Home' },
-      { name: 'Follow-up Session', duration: '30 min', price: '₹1,500', type: 'Virtual/Home' },
-      { name: 'Emergency Support', duration: '45 min', price: '₹3,000', type: '24/7 Available' }
-    ],
-    availability: {
-      monday: ['09:00 AM - 12:00 PM', '02:00 PM - 06:00 PM'],
-      tuesday: ['09:00 AM - 12:00 PM', '02:00 PM - 06:00 PM'],
-      wednesday: ['09:00 AM - 12:00 PM'],
-      thursday: ['09:00 AM - 12:00 PM', '02:00 PM - 06:00 PM'],
-      friday: ['09:00 AM - 12:00 PM', '02:00 PM - 06:00 PM'],
-      saturday: ['10:00 AM - 02:00 PM'],
-      sunday: ['Closed']
-    }
-  }), [id]);
+  useEffect(() => {
+    let mounted = true;
+    const loadProvider = async () => {
+      const res = await fetch(buildApiUrl(`/api/marketplace/providers/${id}`));
+      const data = await res.json();
+      if (!mounted) return;
+      if (data?.provider) {
+        setProvider({
+          ...data.provider,
+          experience: data.provider.experience || 0,
+          languages: data.provider.languages || ['English'],
+          location: data.provider.location || 'Online',
+          distance: data.provider.location || 'Online',
+          responseTime: data.provider.responseTime || '—',
+          reviews: data.provider.reviewsCount || data.provider.reviews || 0,
+          about: data.provider.about || 'Profile details will appear here.',
+          expertise: data.provider.expertise || [],
+          certifications: data.provider.certifications || [],
+          availability: data.provider.availability || {},
+          services: (data.provider.services || []).map((service) => ({
+            name: service.name,
+            duration: service.durationMinutes ? `${service.durationMinutes} min` : '—',
+            price: service.price ? `₹${service.price}` : '—',
+            type: service.sessionType || '—',
+          })),
+        });
+        setReviews(data.provider.reviews || []);
+      }
+    };
+    loadProvider();
+    return () => { mounted = false; };
+  }, [id]);
 
-  const reviews = useMemo(() => [
+  const defaultReviews = useMemo(() => [
     {
       id: 1,
       name: 'Priya Sharma',
@@ -547,7 +604,7 @@ const ServiceProviderProfile = () => {
                       </div>
 
                       {/* Reviews List */}
-                      {reviews.map((review) => (
+                       {displayReviews.map((review) => (
                         <ReviewCard key={review.id} review={review} />
                       ))}
                     </div>
@@ -638,6 +695,7 @@ const ServiceProviderProfile = () => {
         isOpen={showBookingModal}
         onClose={() => setShowBookingModal(false)}
         provider={provider}
+        user={user}
       />
     </div>
   );

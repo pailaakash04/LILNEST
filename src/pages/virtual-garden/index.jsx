@@ -7,9 +7,12 @@ import WellnessMetrics from './components/WellnessMetrics';
 import AchievementCards from './components/AchievementCards';
 import GardenCustomization from './components/GardenCustomization';
 import GrowthAnimationSystem from './components/GrowthAnimationSystem';
+import { useAuth } from '../../contexts/AuthContext';
+import { buildApiUrl } from '../../utils/api';
 
 const VirtualGarden = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeView, setActiveView] = useState('garden');
   const [selectedTheme, setSelectedTheme] = useState('forest');
   const [selectedLayout, setSelectedLayout] = useState('natural');
@@ -17,17 +20,16 @@ const VirtualGarden = () => {
   const [selectedElement, setSelectedElement] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
-  // Mock wellness data
-  const [wellnessData] = useState({
-    focusStreak: 12,
-    breakStreak: 18,
-    meditationMinutes: 145,
-    totalSessions: 67,
-    achievements: 8,
-    gardenLevel: 6,
-    weeklyProgress: [85, 92, 78, 95, 88, 90, 94],
-    lastActivity: new Date(Date.now() - 3600000), // 1 hour ago
-    totalPoints: 1250
+  const [wellnessData, setWellnessData] = useState({
+    focusStreak: 0,
+    breakStreak: 0,
+    meditationMinutes: 0,
+    totalSessions: 0,
+    achievements: 0,
+    gardenLevel: 1,
+    weeklyProgress: [0, 0, 0, 0, 0, 0, 0],
+    lastActivity: null,
+    totalPoints: 0,
   });
 
   const views = [
@@ -126,6 +128,34 @@ const VirtualGarden = () => {
     // Set page title
     document.title = 'Virtual Garden - NeuroSync';
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadStats = async () => {
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl('/api/garden-stats'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!mounted) return;
+      if (data?.stats) {
+        setWellnessData((prev) => ({
+          ...prev,
+          focusStreak: data.stats.focusStreak || 0,
+          breakStreak: data.stats.breakStreak || 0,
+          meditationMinutes: data.stats.meditationMinutes || 0,
+          totalSessions: data.stats.totalSessions || 0,
+          achievements: data.stats.achievements || 0,
+          gardenLevel: data.stats.gardenLevel || 1,
+          weeklyProgress: data.stats.weeklyProgress || prev.weeklyProgress,
+          totalPoints: data.stats.totalPoints || 0,
+        }));
+      }
+    };
+    loadStats();
+    return () => { mounted = false; };
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-background">

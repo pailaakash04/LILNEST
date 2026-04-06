@@ -1,0 +1,453 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  mother
+  doctor
+  admin
+}
+
+enum CapsuleStatus {
+  locked
+  editable
+  unlocked
+}
+
+enum UnlockType {
+  birth
+  age
+  date
+  custom
+}
+
+enum MediaType {
+  photo
+  video
+  audio
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+  completed
+}
+
+enum SessionType {
+  focus
+  short_break
+  long_break
+  meditation
+  exercise
+  hydration
+}
+
+enum ContactType {
+  hospital
+  doctor
+  partner
+  family
+  emergency
+  other
+}
+
+enum MedicineKind {
+  mother
+  baby
+}
+
+model Patient {
+  id        String   @id @default(uuid()) @db.Char(36)
+  name      String   @db.Text
+  risk      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  prescriptions PatientPrescription[]
+  reports       PatientReport[]
+
+  @@map("patients")
+}
+
+model PatientPrescription {
+  id        String   @id @default(uuid()) @db.Char(36)
+  patientId String   @map("patient_id") @db.Char(36)
+  drug      String   @db.Text
+  dose      String   @db.Text
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId], map: "patient_prescriptions_patient_idx")
+  @@map("patient_prescriptions")
+}
+
+model PatientReport {
+  id        String   @id @default(uuid()) @db.Char(36)
+  patientId String   @map("patient_id") @db.Char(36)
+  name      String   @db.Text
+  type      String?  @db.Text
+  size      Int?
+  url       String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId], map: "patient_reports_patient_idx")
+  @@map("patient_reports")
+}
+
+model User {
+  id            String               @id @default(uuid()) @db.Char(36)
+  firebaseUid   String               @unique @map("firebase_uid") @db.VarChar(128)
+  email         String?              @unique @db.VarChar(255)
+  displayName   String?              @map("display_name") @db.VarChar(120)
+  role          UserRole             @default(mother)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  profile       UserProfile?
+  posts         CommunityPost[]
+  comments      CommunityComment[]
+  postLikes     CommunityPostLike[]
+  commentLikes  CommunityCommentLike[]
+  timeCapsules  TimeCapsule[]
+  bookings      MarketplaceBooking[]
+  emergencyContacts EmergencyContact[]
+  prescriptions MedicinePrescription[]
+  hydrationLogs HydrationLog[]
+  wellnessSessions WellnessSession[]
+  gardenStat    GardenStat?
+  rewardsSummary RewardsSummary?
+  rewardsChallenges RewardsChallenge[]
+  settings      UserSetting?
+  auditEvents   AuditEvent[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  userId        String    @id @map("user_id") @db.Char(36)
+  phone         String?   @db.VarChar(32)
+  avatarUrl     String?   @map("avatar_url") @db.Text
+  location      String?   @db.VarChar(255)
+  dueDate       DateTime? @map("due_date") @db.Date
+  pregnancyWeek Int?      @map("pregnancy_week")
+  bio           String?   @db.Text
+  preferences   Json?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model CommunityPost {
+  id           String   @id @default(uuid()) @db.Char(36)
+  userId       String   @map("user_id") @db.Char(36)
+  title        String?  @db.Text
+  body         String   @db.Text
+  category     String?  @db.Text
+  authorName   String?  @map("author_name") @db.Text
+  isAnonymous  Boolean  @default(false) @map("is_anonymous")
+  tags         Json?
+  likeCount    Int      @default(0) @map("like_count")
+  commentCount Int      @default(0) @map("comment_count")
+  views        Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments     CommunityComment[]
+  postLikes    CommunityPostLike[]
+
+  @@index([userId], map: "community_posts_user_idx")
+  @@index([createdAt], map: "community_posts_created_idx")
+  @@map("community_posts")
+}
+
+model CommunityComment {
+  id        String   @id @default(uuid()) @db.Char(36)
+  postId    String   @map("post_id") @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  body      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes     CommunityCommentLike[]
+
+  @@index([postId], map: "community_comments_post_idx")
+  @@map("community_comments")
+}
+
+model CommunityPostLike {
+  postId    String   @map("post_id") @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@map("community_post_likes")
+}
+
+model CommunityCommentLike {
+  commentId String   @map("comment_id") @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment   CommunityComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId])
+  @@map("community_comment_likes")
+}
+
+model TimeCapsule {
+  id         String         @id @default(uuid()) @db.Char(36)
+  userId     String         @map("user_id") @db.Char(36)
+  title      String         @db.Text
+  message    String         @db.Text
+  status     CapsuleStatus  @default(locked)
+  unlockType UnlockType     @default(date) @map("unlock_type")
+  unlockDate DateTime?      @map("unlock_date") @db.Date
+  editUntil  DateTime?      @map("edit_until")
+  meta       Json?
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media      TimeCapsuleMedia[]
+
+  @@index([userId], map: "time_capsules_user_idx")
+  @@map("time_capsules")
+}
+
+model TimeCapsuleMedia {
+  id           String    @id @default(uuid()) @db.Char(36)
+  capsuleId    String    @map("capsule_id") @db.Char(36)
+  type         MediaType
+  storageUrl   String    @map("storage_url") @db.Text
+  thumbnailUrl String?   @map("thumbnail_url") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  capsule      TimeCapsule @relation(fields: [capsuleId], references: [id], onDelete: Cascade)
+
+  @@map("time_capsule_media")
+}
+
+model MarketplaceProvider {
+  id           String    @id @default(uuid()) @db.Char(36)
+  name         String    @db.Text
+  category     String    @db.Text
+  title        String?   @db.Text
+  rating       Decimal?  @default(0.0) @db.Decimal(2, 1)
+  reviewsCount Int       @default(0) @map("reviews_count")
+  priceRange   String?   @map("price_range") @db.Text
+  verified     Boolean   @default(false)
+  featured     Boolean   @default(false)
+  online       Boolean   @default(false)
+  responseTime String?   @map("response_time") @db.Text
+  tags         Json?
+  location     String?   @db.Text
+  serviceArea  Json?     @map("service_area")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  services     MarketplaceService[]
+  reviews      MarketplaceReview[]
+  bookings     MarketplaceBooking[]
+
+  @@map("marketplace_providers")
+}
+
+model MarketplaceService {
+  id              String   @id @default(uuid()) @db.Char(36)
+  providerId      String   @map("provider_id") @db.Char(36)
+  name            String   @db.Text
+  durationMinutes Int      @map("duration_minutes")
+  price           Decimal  @db.Decimal(10, 2)
+  sessionType     String   @map("session_type") @db.Text
+  description     String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  provider        MarketplaceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  bookings        MarketplaceBooking[]
+
+  @@map("marketplace_services")
+}
+
+model MarketplaceReview {
+  id         String   @id @default(uuid()) @db.Char(36)
+  providerId String   @map("provider_id") @db.Char(36)
+  userId     String   @map("user_id") @db.Char(36)
+  rating     Int
+  comment    String?  @db.Text
+  tags       Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  provider   MarketplaceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("marketplace_reviews")
+}
+
+model MarketplaceBooking {
+  id           String        @id @default(uuid()) @db.Char(36)
+  userId       String        @map("user_id") @db.Char(36)
+  providerId   String        @map("provider_id") @db.Char(36)
+  serviceId    String?       @map("service_id") @db.Char(36)
+  status       BookingStatus @default(pending)
+  sessionType  String        @map("session_type") @db.Text
+  scheduledAt  DateTime      @map("scheduled_at")
+  notes        String?       @db.Text
+  paymentMethod String?      @map("payment_method") @db.Text
+  amount       Decimal?      @db.Decimal(10, 2)
+  currency     String?       @db.VarChar(10)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     MarketplaceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  service      MarketplaceService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId], map: "marketplace_bookings_user_idx")
+  @@map("marketplace_bookings")
+}
+
+model EmergencyContact {
+  id        String      @id @default(uuid()) @db.Char(36)
+  userId    String      @map("user_id") @db.Char(36)
+  type      ContactType
+  name      String      @db.Text
+  phone     String      @db.Text
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type], map: "uniq_emergency_type")
+  @@map("emergency_contacts")
+}
+
+model MedicinePrescription {
+  id           String      @id @default(uuid()) @db.Char(36)
+  userId       String      @map("user_id") @db.Char(36)
+  medicineKey  String      @map("medicine_key") @db.Text
+  medicineName String      @map("medicine_name") @db.Text
+  kind         MedicineKind
+  dosage       String?     @db.Text
+  notes        String?     @db.Text
+  takenAt      DateTime    @default(now()) @map("taken_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "medicine_prescriptions_user_idx")
+  @@map("medicine_prescriptions")
+}
+
+model HydrationLog {
+  id        String   @id @default(uuid()) @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  amountMl  Int      @map("amount_ml")
+  loggedAt  DateTime @default(now()) @map("logged_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("hydration_logs")
+}
+
+model WellnessSession {
+  id              String      @id @default(uuid()) @db.Char(36)
+  userId          String      @map("user_id") @db.Char(36)
+  type            SessionType
+  durationMinutes Int         @map("duration_minutes")
+  occurredAt      DateTime    @default(now()) @map("occurred_at")
+  meta            Json?
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wellness_sessions")
+}
+
+model GardenStat {
+  userId           String   @id @map("user_id") @db.Char(36)
+  focusStreak      Int      @default(0) @map("focus_streak")
+  breakStreak      Int      @default(0) @map("break_streak")
+  meditationMinutes Int     @default(0) @map("meditation_minutes")
+  totalSessions    Int      @default(0) @map("total_sessions")
+  achievements     Int      @default(0)
+  gardenLevel      Int      @default(1) @map("garden_level")
+  weeklyProgress   Json?    @map("weekly_progress")
+  totalPoints      Int      @default(0) @map("total_points")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("garden_stats")
+}
+
+model RewardsSummary {
+  userId   String   @id @map("user_id") @db.Char(36)
+  points   Int      @default(0)
+  level    Int      @default(1)
+  streak   Int      @default(0)
+  badges   Json?
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("rewards_summary")
+}
+
+model RewardsChallenge {
+  id          String   @id @default(uuid()) @db.Char(36)
+  userId      String   @map("user_id") @db.Char(36)
+  name        String   @map("title") @db.Text
+  description String?  @db.Text
+  goal        Int      @default(0)
+  progress    Int      @default(0)
+  xp          Int      @default(0) @map("points")
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("rewards_challenges")
+}
+
+model UserSetting {
+  userId    String   @id @map("user_id") @db.Char(36)
+  settings  Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model AuditEvent {
+  id        String   @id @default(uuid()) @db.Char(36)
+  userId    String?  @map("user_id") @db.Char(36)
+  action    String   @db.Text
+  entity    String   @db.Text
+  entityId  String?  @map("entity_id") @db.Char(36)
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_events")
+}

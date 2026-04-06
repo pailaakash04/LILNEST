@@ -4,9 +4,8 @@ import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import Icon from '../../components/AppIcon';
 import { useAuth } from '../../contexts/AuthContext';
-import { db } from '../../firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
 import { buildFitnessPlan } from '../../utils/fitnessRules';
+import { buildApiUrl } from '../../utils/api';
 
 const WorkoutCard = ({ title, duration, intensity, icon, color, description, onStart }) => (
   <div className="group bg-card rounded-2xl p-6 shadow-soft border border-border hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
@@ -95,9 +94,12 @@ const Fitness = () => {
     let mounted = true;
     (async () => {
       if (!user) return;
-      const ref = doc(db, 'users', user.uid, 'profiles', 'mother');
-      const snap = await getDoc(ref);
-      if (mounted) setProfile(snap.exists() ? snap.data() : {});
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl('/api/profile?type=mother'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (mounted) setProfile(data?.profile || {});
     })();
     return () => { mounted = false; };
   }, [user]);

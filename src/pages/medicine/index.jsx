@@ -6,6 +6,8 @@ import FilterBar from './components/FilterBar';
 import MedicineCard from './components/MedicineCard';
 import MedicineDetailsModal from './components/MedicineDetailsModal';
 import { babyMedicines, motherMedicines, META } from './data';
+import { useAuth } from '../../contexts/AuthContext';
+import { buildApiUrl } from '../../utils/api';
 
 const TAB = {
   MOTHER: 'mother',
@@ -82,22 +84,8 @@ const DataTable = ({ rows, kind }) => (
   </div>
 );
 
-const useLocalStorage = (key, initial) => {
-  const [state, setState] = useState(() => {
-    try {
-      const v = localStorage.getItem(key);
-      return v ? JSON.parse(v) : initial;
-    } catch {
-      return initial;
-    }
-  });
-  useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
-  }, [key, state]);
-  return [state, setState];
-};
-
 const MedicineGuide = () => {
+  const { user } = useAuth();
   const [tab, setTab] = useState(TAB.MOTHER);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
@@ -106,7 +94,22 @@ const MedicineGuide = () => {
   const [ageGroup, setAgeGroup] = useState("all");
   const [sortAlpha, setSortAlpha] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [rx, setRx] = useLocalStorage('lilnest_prescription', []);
+  const [rx, setRx] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadRx = async () => {
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl('/api/medicine/prescriptions'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (mounted) setRx(data?.prescriptions || []);
+    };
+    loadRx();
+    return () => { mounted = false; };
+  }, [user]);
 
   const dataset = tab === TAB.MOTHER ? motherMedicines : babyMedicines;
 
@@ -158,11 +161,28 @@ const MedicineGuide = () => {
     return rows;
   }, [dataset, query, category, form, trimester, ageGroup, sortAlpha]);
 
-  const handleAdd = (item) => {
-    setRx((prev) => {
-      if (prev.find((p) => p.id === item.id)) return prev;
-      return [...prev, { id: item.id, name: item.name, kind: tab, when: Date.now() }];
+  const handleAdd = async (item) => {
+    if (!user) return;
+    if (rx.find((p) => p.medicineKey === item.id)) return;
+    const token = await user.getIdToken();
+    await fetch(buildApiUrl('/api/medicine/prescriptions'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        medicineKey: item.id,
+        medicineName: item.name,
+        kind: tab,
+      }),
     });
+
+    const res = await fetch(buildApiUrl('/api/medicine/prescriptions'), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    setRx(data?.prescriptions || []);
   };
 
   return (

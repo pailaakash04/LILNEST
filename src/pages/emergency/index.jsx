@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import Icon from '../../components/AppIcon';
+import { buildApiUrl } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const EmergencyContactCard = ({ type, name, phone, onEdit, onCall }) => {
   const icons = {
@@ -76,6 +78,7 @@ const RedFlagCard = ({ icon, title, description, severity }) => {
 
 const Emergency = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [contacts, setContacts] = useState({
     hospital: { name: '', phone: '' },
     doctor: { name: '', phone: '' },
@@ -90,12 +93,31 @@ const Emergency = () => {
   const [showSOSModal, setShowSOSModal] = useState(false);
 
   useEffect(() => {
-    // Load saved contacts from localStorage
-    const saved = localStorage.getItem('emergencyContacts');
-    if (saved) {
-      setContacts(JSON.parse(saved));
-    }
-  }, []);
+    let mounted = true;
+    const loadContacts = async () => {
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl('/api/emergency-contacts'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!mounted) return;
+
+      const map = {
+        hospital: { name: '', phone: '' },
+        doctor: { name: '', phone: '' },
+        partner: { name: '', phone: '' },
+        family: { name: '', phone: '' },
+      };
+      (data?.contacts || []).forEach((c) => {
+        map[c.type] = { name: c.name || '', phone: c.phone || '' };
+      });
+      setContacts(map);
+    };
+
+    loadContacts();
+    return () => { mounted = false; };
+  }, [user]);
 
   useEffect(() => {
     // Get user location
@@ -130,13 +152,28 @@ const Emergency = () => {
     return () => clearInterval(interval);
   }, [sosActive, sosCountdown]);
 
-  const saveContact = (type, name, phone) => {
+  const saveContact = async (type, name, phone) => {
     const updated = {
       ...contacts,
       [type]: { name, phone }
     };
     setContacts(updated);
-    localStorage.setItem('emergencyContacts', JSON.stringify(updated));
+    if (user) {
+      const token = await user.getIdToken();
+      const payload = Object.entries(updated).map(([key, value]) => ({
+        type: key,
+        name: value.name,
+        phone: value.phone,
+      }));
+      await fetch(buildApiUrl('/api/emergency-contacts'), {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contacts: payload }),
+      });
+    }
     setEditingContact(null);
   };
 

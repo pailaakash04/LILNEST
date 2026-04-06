@@ -3,8 +3,7 @@ import Header from '../../components/ui/Header';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../contexts/AuthContext';
-import { db } from '../../firebase/config';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { buildApiUrl } from '../../utils/api';
 
 const Checkbox = ({ label, checked, onChange }) => (
   <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={checked} onChange={(e)=>onChange(e.target.checked)} /> <span>{label}</span></label>
@@ -17,7 +16,7 @@ const Section = ({ title, children }) => (
   </div>
 );
 
-const MotherTab = ({ uid }) => {
+const MotherTab = ({ user }) => {
   const [form, setForm] = useState({
     trimester: '', edd: '', history: '',
     medical: { anemia:false, thyroid:false, diabetes:false, bp:false, epilepsy:false, asthma:false },
@@ -27,17 +26,28 @@ const MotherTab = ({ uid }) => {
 
   useEffect(() => {
     (async () => {
-      const ref = doc(db, 'users', uid, 'profiles', 'mother');
-      const snap = await getDoc(ref);
-      if (snap.exists()) setForm({ ...form, ...snap.data() });
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl('/api/profile?type=mother'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data?.profile) setForm({ ...form, ...data.profile });
     })();
     // eslint-disable-next-line
-  }, [uid]);
+  }, [user]);
 
   const save = async () => {
     setSaving(true);
-    const ref = doc(db, 'users', uid, 'profiles', 'mother');
-    await setDoc(ref, { ...form, updatedAt: serverTimestamp() });
+    const token = await user.getIdToken();
+    await fetch(buildApiUrl('/api/profile'), {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ type: 'mother', data: form }),
+    });
     setSaving(false);
   };
 
@@ -69,7 +79,7 @@ const MotherTab = ({ uid }) => {
   );
 };
 
-const ChildTab = ({ uid }) => {
+const ChildTab = ({ user }) => {
   const [form, setForm] = useState({
     age: '', weight:'', height:'', head:'', feeding:'', allergies:'', vaccinations:''
   });
@@ -77,17 +87,28 @@ const ChildTab = ({ uid }) => {
 
   useEffect(() => {
     (async () => {
-      const ref = doc(db, 'users', uid, 'profiles', 'child');
-      const snap = await getDoc(ref);
-      if (snap.exists()) setForm({ ...form, ...snap.data() });
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl('/api/profile?type=child'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data?.profile) setForm({ ...form, ...data.profile });
     })();
     // eslint-disable-next-line
-  }, [uid]);
+  }, [user]);
 
   const save = async () => {
     setSaving(true);
-    const ref = doc(db, 'users', uid, 'profiles', 'child');
-    await setDoc(ref, { ...form, updatedAt: serverTimestamp() });
+    const token = await user.getIdToken();
+    await fetch(buildApiUrl('/api/profile'), {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ type: 'child', data: form }),
+    });
     setSaving(false);
   };
 
@@ -126,7 +147,7 @@ const Profile = () => {
             <button className={`px-3 py-1 rounded-md ${tab==='child'?'bg-primary text-primary-foreground':''}`} onClick={()=>setTab('child')}>Child</button>
           </div>
         </div>
-        {tab==='mother' ? <MotherTab uid={user?.uid} /> : <ChildTab uid={user?.uid} />}
+        {tab==='mother' ? <MotherTab user={user} /> : <ChildTab user={user} />}
       </main>
     </div>
   );

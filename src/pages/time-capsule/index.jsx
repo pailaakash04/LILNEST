@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import Icon from '../../components/AppIcon';
+import { useAuth } from '../../contexts/AuthContext';
+import { buildApiUrl } from '../../utils/api';
 
 // Capsule Card Component
 const CapsuleCard = ({ capsule, onClick }) => {
@@ -121,7 +123,7 @@ const TemplateCard = ({ template, onClick }) => (
 );
 
 // Create Capsule Modal
-const CreateCapsuleModal = ({ isOpen, onClose, template }) => {
+const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
   const [step, setStep] = useState(1);
   const [capsuleData, setCapsuleData] = useState({
     title: template?.title || '',
@@ -146,8 +148,34 @@ const CreateCapsuleModal = ({ isOpen, onClose, template }) => {
     { id: 'custom', label: 'Custom Date', icon: 'Calendar', age: 'Custom' }
   ];
 
-  const handleCreate = () => {
-    alert('Time Capsule created and locked! It will unlock on the chosen date.');
+  const handleCreate = async () => {
+    if (!user) {
+      alert('Please log in to create a time capsule.');
+      return;
+    }
+
+    const token = await user.getIdToken();
+    const unlockType = capsuleData.unlockType === 'custom' ? 'custom' : 'age';
+
+    await fetch(buildApiUrl('/api/time-capsules'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: capsuleData.title,
+        message: capsuleData.message,
+        unlockType,
+        unlockDate: capsuleData.unlockDate || null,
+        meta: {
+          unlockOption: capsuleData.unlockType,
+          templateId: template?.id || null,
+        },
+      }),
+    });
+
+    if (onCreated) await onCreated();
     onClose();
     setStep(1);
   };
@@ -291,6 +319,18 @@ const CreateCapsuleModal = ({ isOpen, onClose, template }) => {
                     </button>
                   ))}
                 </div>
+                {capsuleData.unlockType === 'custom' && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-semibold text-foreground mb-2">Choose Date</label>
+                    <input
+                      type="date"
+                      value={capsuleData.unlockDate}
+                      onChange={(e) => setCapsuleData({ ...capsuleData, unlockDate: e.target.value })}
+                      className="w-full px-4 py-3 bg-card border-2 border-border focus:border-primary rounded-xl outline-none"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex gap-3">
                 <Button onClick={() => setStep(2)} variant="outline" className="flex-1">
@@ -366,98 +406,56 @@ const CreateCapsuleModal = ({ isOpen, onClose, template }) => {
 
 const TimeCapsule = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('my-capsules');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [myCapsules, setMyCapsules] = useState([]);
 
-  // Mock data - My Capsules
-  const myCapsules = useMemo(() => [
-    {
-      id: 1,
-      title: 'First Day Home',
-      description: 'Our first moments together as a family. The joy, the fear, the overwhelming love.',
-      icon: 'Home',
-      gradient: 'from-pink-400 to-rose-400',
-      createdDate: 'Nov 1, 2024',
-      unlockText: 'Opens in 1 year',
-      status: 'locked',
-      photos: 5,
-      videos: 1,
-      audio: 0,
-      mediaCount: 6
-    },
-    {
-      id: 2,
-      title: 'Week 20 Ultrasound',
-      description: 'The moment we saw your face for the first time. You were so beautiful.',
-      icon: 'Heart',
-      gradient: 'from-blue-400 to-indigo-400',
-      createdDate: 'Oct 15, 2024',
-      unlockText: 'Opens in 5 years',
-      status: 'locked',
-      photos: 3,
-      videos: 0,
-      audio: 1,
-      mediaCount: 4
-    },
-    {
-      id: 3,
-      title: 'First Words Draft',
-      description: 'Preparing for the day you speak your first words. What will they be?',
-      icon: 'MessageCircle',
-      gradient: 'from-sky-400 to-cyan-400',
-      createdDate: 'Nov 10, 2024',
-      unlockText: 'Editable for 18 hours',
-      status: 'editable',
-      photos: 0,
-      videos: 0,
-      audio: 2,
-      mediaCount: 2
-    },
-    {
-      id: 4,
-      title: 'Teenage Wisdom',
-      description: 'Advice for when you face the challenges of growing up.',
-      icon: 'Users',
-      gradient: 'from-emerald-400 to-teal-400',
-      createdDate: 'Nov 5, 2024',
-      unlockText: 'Opens in 13 years',
-      status: 'locked',
-      photos: 0,
-      videos: 1,
-      audio: 0,
-      mediaCount: 1
-    },
-    {
-      id: 5,
-      title: 'Graduation Message',
-      description: 'For your high school graduation day. We are so proud of you.',
-      icon: 'Award',
-      gradient: 'from-amber-400 to-orange-400',
-      createdDate: 'Oct 28, 2024',
-      unlockText: 'Opens in 18 years',
-      status: 'locked',
-      photos: 2,
-      videos: 1,
-      audio: 1,
-      mediaCount: 4
-    },
-    {
-      id: 6,
-      title: 'Wedding Day Letter',
-      description: 'For the day you find your forever love. May you be as happy as we are.',
-      icon: 'Heart',
-      gradient: 'from-pink-400 to-pink-500',
-      createdDate: 'Nov 3, 2024',
-      unlockText: 'Opens in 25 years',
-      status: 'locked',
-      photos: 4,
-      videos: 0,
-      audio: 1,
-      mediaCount: 5
+  const mapCapsule = (capsule) => {
+    const createdDate = capsule.createdAt ? new Date(capsule.createdAt) : new Date();
+    const createdLabel = createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const mediaCount = capsule.media?.length || 0;
+
+    let unlockText = 'Locked';
+    if (capsule.status === 'editable') unlockText = 'Editable';
+    if (capsule.unlockDate) {
+      const diff = Math.max(0, Math.ceil((new Date(capsule.unlockDate).getTime() - Date.now()) / 86400000));
+      unlockText = diff === 0 ? 'Opens today' : `Opens in ${diff} days`;
     }
-  ], []);
+
+    return {
+      id: capsule.id,
+      title: capsule.title,
+      description: capsule.message,
+      icon: 'Gift',
+      gradient: 'from-pink-400 to-rose-400',
+      createdDate: createdLabel,
+      unlockText,
+      status: capsule.status || 'locked',
+      photos: 0,
+        const [searchQuery, setSearchQuery] = useState('');
+        const [myCapsules, setMyCapsules] = useState([]);
+      
+      audio: 0,
+      mediaCount,
+    };
+  };
+
+  const loadCapsules = async () => {
+    if (!user) return;
+    const token = await user.getIdToken();
+    const res = await fetch(buildApiUrl('/api/time-capsules'), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    setMyCapsules((data?.capsules || []).map(mapCapsule));
+  };
+
+  useEffect(() => {
+    loadCapsules();
+  }, [user]);
 
   // Mock data - Template Ideas
   const templates = useMemo(() => [

@@ -1,29 +1,34 @@
-import { db } from '../firebase/config';
-import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { buildApiUrl } from './api';
 
-export async function loadHydration(uid, dateKey) {
+async function authHeaders(user) {
+  const token = await user.getIdToken();
+  return { Authorization: `Bearer ${token}` };
+}
+
+export async function loadHydration(user, dateKey) {
   try {
-    const ref = doc(db, 'users', uid, 'hydration', dateKey);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const data = snap.data();
-      return data?.total || 0;
-    }
-    return 0;
+    if (!user) return 0;
+    const res = await fetch(buildApiUrl(`/api/hydration?date=${dateKey}`), {
+      headers: await authHeaders(user),
+    });
+    const data = await res.json();
+    return Number(data?.total || 0);
   } catch {
     return 0;
   }
 }
 
-export async function addHydration(uid, dateKey, amount) {
+export async function addHydration(user, amount) {
   try {
-    const ref = doc(db, 'users', uid, 'hydration', dateKey);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, { total: amount, updatedAt: serverTimestamp() });
-    } else {
-      await updateDoc(ref, { total: increment(amount), updatedAt: serverTimestamp() });
-    }
+    if (!user) return false;
+    await fetch(buildApiUrl('/api/hydration'), {
+      method: 'POST',
+      headers: {
+        ...(await authHeaders(user)),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ amountMl: amount }),
+    });
     return true;
   } catch {
     return false;

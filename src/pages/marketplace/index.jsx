@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import Icon from '../../components/AppIcon';
 import Input from '../../components/ui/Input';
 import SkeletonLoader from '../../components/ui/SkeletonLoader';
+import { buildApiUrl } from '../../utils/api';
 
 // Provider Card Component with enhanced design
 const ProviderCard = ({ provider, onClick, isFavorite, onToggleFavorite }) => (
@@ -151,12 +152,26 @@ const FilterChip = ({ label, icon, isActive, onClick }) => (
   </button>
 );
 
+const resolveCategoryId = (category = '') => {
+  const value = category.toLowerCase();
+  if (value.includes('lactation')) return 'lactation';
+  if (value.includes('doula')) return 'doula';
+  if (value.includes('sleep')) return 'sleep';
+  if (value.includes('massage')) return 'massage';
+  if (value.includes('nanny') || value.includes('childcare')) return 'nanny';
+  if (value.includes('nutrition')) return 'nutrition';
+  if (value.includes('mental') || value.includes('therapist')) return 'mental';
+  if (value.includes('physio')) return 'physio';
+  return 'all';
+};
+
 const Marketplace = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('recommended');
   const [loading, setLoading] = useState(true);
+  const [providers, setProviders] = useState([]);
   const [favorites, setFavorites] = useState(() => {
     const saved = localStorage.getItem('favoriteProviders');
     return saved ? JSON.parse(saved) : [];
@@ -170,145 +185,41 @@ const Marketplace = () => {
   const [showCategoryView, setShowCategoryView] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, [selectedCategory]);
+    let mounted = true;
+    const loadProviders = async () => {
+      setLoading(true);
+      const res = await fetch(buildApiUrl('/api/marketplace/providers'));
+      const data = await res.json();
+      if (!mounted) return;
+      setProviders(data?.providers || []);
+      setLoading(false);
+    };
+    loadProviders();
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('favoriteProviders', JSON.stringify(favorites));
   }, [favorites]);
 
-  const toggleFavorite = (providerId) => {
-    setFavorites(prev => 
-      prev.includes(providerId) 
-        ? prev.filter(id => id !== providerId)
-        : [...prev, providerId]
-    );
-  };
-
-  const categories = [
-    { id: 'all', label: 'All Services', icon: 'Store', color: 'primary' },
-    { id: 'lactation', label: 'Lactation', icon: 'Baby', color: 'pink', description: 'Expert breastfeeding support' },
-    { id: 'doula', label: 'Doulas', icon: 'Heart', color: 'rose', description: 'Birth & postpartum care' },
-    { id: 'sleep', label: 'Sleep Training', icon: 'Moon', color: 'indigo', description: 'Baby sleep specialists' },
-    { id: 'massage', label: 'Massage', icon: 'Hand', color: 'green', description: 'Prenatal & postnatal therapy' },
-    { id: 'nanny', label: 'Childcare', icon: 'Users', color: 'orange', description: 'Nannies & babysitters' },
-    { id: 'nutrition', label: 'Nutrition', icon: 'Apple', color: 'red', description: 'Pediatric nutritionists' },
-    { id: 'mental', label: 'Mental Health', icon: 'Brain', color: 'purple', description: 'Counselors & therapists' },
-    { id: 'physio', label: 'Physiotherapy', icon: 'Activity', color: 'blue', description: 'Pediatric physiotherapists' }
-  ];
-
-  const allProviders = useMemo(() => [
-    {
-      id: '1',
-      name: 'Dr. Aishwarya Menon',
-      category: 'Lactation Consultant',
-      rating: 4.9,
-      reviews: 234,
-      distance: '1.6 km',
-      priceRange: '₹1,500 - ₹2,500',
-      verified: true,
-      featured: true,
-      online: true,
-      responseTime: '~2h',
-      tags: ['IBCLC Certified', 'Home Visits', '24/7 Support'],
-      categoryId: 'lactation',
-      available: true
-    },
-    {
-      id: '2',
-      name: 'Priya Sharma',
-      category: 'Postpartum Doula',
-      rating: 4.8,
-      reviews: 189,
-      distance: '2.3 km',
-      priceRange: '₹3,000 - ₹5,000',
-      verified: true,
-      featured: true,
-      online: false,
-      responseTime: '~4h',
-      tags: ['12 Years Exp', 'Night Care', 'Certified'],
-      categoryId: 'doula',
-      available: true
-    },
-    {
-      id: '3',
-      name: 'Sleep Solutions',
-      category: 'Pediatric Sleep Trainer',
-      rating: 4.7,
-      reviews: 156,
-      distance: 'Online',
-      priceRange: '₹2,000 - ₹4,000',
-      verified: true,
-      featured: false,
-      online: true,
-      responseTime: '~1h',
-      tags: ['Video Sessions', 'Follow-ups', 'Custom Plans'],
-      categoryId: 'sleep',
-      available: true
-    },
-    {
-      id: '4',
-      name: 'Wellness Touch',
-      category: 'Prenatal Massage Therapist',
-      rating: 4.9,
-      reviews: 287,
-      distance: '3.5 km',
-      priceRange: '₹1,800 - ₹3,000',
-      verified: true,
-      featured: false,
-      online: true,
-      responseTime: '~3h',
-      tags: ['Certified', 'Home Service', 'Aromatherapy'],
-      categoryId: 'massage',
-      available: false
-    },
-    {
-      id: '5',
-      name: 'Care Angels',
-      category: 'Nanny Services',
-      rating: 4.6,
-      reviews: 412,
-      distance: '1.2 km',
-      priceRange: '₹15,000/month',
-      verified: true,
-      featured: false,
-      online: false,
-      responseTime: '~6h',
-      tags: ['Background Check', 'Full-time', 'First Aid'],
-      categoryId: 'nanny',
-      available: true
-    },
-    {
-      id: '6',
-      name: 'NutriMom Clinic',
-      category: 'Pediatric Nutritionist',
-      rating: 4.8,
-      reviews: 198,
-      distance: 'Online',
-      priceRange: '₹1,200 - ₹2,000',
-      verified: true,
-      featured: false,
-      online: true,
-      responseTime: '~2h',
-      tags: ['Custom Plans', 'Online', 'Diet Charts'],
-      categoryId: 'nutrition',
-      available: true
-    },
-    {
-      id: '7',
-      name: 'Maya Doula Services',
-      category: 'Birth Doula',
-      rating: 5.0,
-      reviews: 143,
-      distance: '4.1 km',
-      priceRange: '₹20,000 - ₹35,000',
-      verified: true,
-      featured: true,
-      online: true,
-      responseTime: '~1h',
-      tags: ['Birth Support', 'Prenatal', 'Postnatal'],
+  const allProviders = useMemo(() => {
+    return providers.map((provider) => ({
+      id: provider.id,
+      name: provider.name,
+      category: provider.category,
+      rating: provider.rating || 0,
+      reviews: provider.reviewsCount || 0,
+      distance: provider.location || 'Online',
+      priceRange: provider.priceRange || '—',
+      verified: provider.verified,
+      featured: provider.featured,
+      online: provider.online,
+      responseTime: provider.responseTime || '—',
+      tags: provider.tags || [],
+      categoryId: resolveCategoryId(provider.category),
+      available: true,
+    }));
+  }, [providers]);
       categoryId: 'doula',
       available: true
     },

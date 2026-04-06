@@ -30,25 +30,25 @@ const Rewards = () => {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      await ensureSummary(user.uid);
-      const s = await getSummary(user.uid);
+      await ensureSummary(user);
+      const s = await getSummary(user);
       setSummary(s);
-      const list = await getChallenges(user.uid);
+      const list = await getChallenges(user);
       if (!list.length) {
-        await addChallenge(user.uid, { name: '7-Day Wellness', goal: 7, progress: 0, xp: 500 });
-        await addChallenge(user.uid, { name: 'Hydration Month', goal: 30, progress: 0, xp: 1000 });
+        await addChallenge(user, { name: '7-Day Wellness', goal: 7, progress: 0, xp: 500 });
+        await addChallenge(user, { name: 'Hydration Month', goal: 30, progress: 0, xp: 1000 });
       }
-      const fresh = await getChallenges(user.uid);
+      const fresh = await getChallenges(user);
       setChallenges(fresh);
     })();
   }, [user]);
 
   const checkIn = async () => {
     if (!user) return;
-    const res = await addPoints(user.uid, 50);
+    const res = await addPoints(user, 50);
     setSummary((s) => ({ ...s, points: res.points, level: res.level }));
     if (res.points >= 500 && !(summary.badges || []).includes('Getting Started')) {
-      const badges = await grantBadge(user.uid, 'Getting Started');
+      const badges = await grantBadge(user, 'Getting Started');
       setSummary((s) => ({ ...s, badges }));
     }
   };

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import Groq from 'groq-sdk';
+import apiRouter from './routes/api.js';
 
 const app = express();
 app.use(cors());
@@ -35,6 +36,8 @@ app.post('/api/chat', async (req, res) => {
     res.status(500).json({ error: 'Chat request failed' });
   }
 });
+
+app.use('/api', apiRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

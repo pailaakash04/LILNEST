@@ -4,9 +4,8 @@ import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Icon from '../../components/AppIcon';
-import { db } from '../../firebase/config';
-import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, updateDoc, doc, increment } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
+import { buildApiUrl } from '../../utils/api';
 
 // Category Badge Component
 const CategoryBadge = ({ category, count }) => {
@@ -186,23 +185,31 @@ const Community = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showPostModal, setShowPostModal] = useState(false);
   const [selectedThread, setSelectedThread] = useState(null);
+  const [replyText, setReplyText] = useState('');
 
   useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = [];
-      snap.forEach((d) => {
-        const data = d.data();
-        list.push({ 
-          id: d.id, 
-          ...data,
-          timeAgo: data.createdAt?.toDate ? getTimeAgo(data.createdAt.toDate()) : 'Just now',
-          isNew: data.createdAt?.toDate ? (Date.now() - data.createdAt.toDate().getTime() < 86400000) : true
+    let mounted = true;
+    const loadPosts = async () => {
+      try {
+        const res = await fetch(buildApiUrl('/api/community/posts'));
+        const data = await res.json();
+        if (!mounted) return;
+        const list = (data?.posts || []).map((post) => {
+          const createdAt = post.createdAt ? new Date(post.createdAt) : new Date();
+          return {
+            ...post,
+            timeAgo: getTimeAgo(createdAt),
+            isNew: Date.now() - createdAt.getTime() < 86400000,
+          };
         });
-      });
-      setPosts(list);
-    });
-    return () => unsub();
+        setPosts(list);
+      } catch {
+        if (mounted) setPosts([]);
+      }
+    };
+
+    loadPosts();
+    return () => { mounted = false; };
   }, []);
 
   const getTimeAgo = (date) => {
@@ -215,23 +222,40 @@ const Community = () => {
   };
 
   const createPost = async () => {
-    if (!title.trim() || !body.trim()) return;
-    await addDoc(collection(db, 'posts'), {
-      title: title.trim(),
-      body: body.trim(),
-      category: category,
-      tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-      authorName: isAnonymous ? 'Anonymous' : (user?.displayName || user?.email || 'Anonymous'),
-      isAnonymous: isAnonymous,
-      likes: 0,
-      replies: 0,
-      views: 0,
-      createdAt: serverTimestamp(),
+    if (!title.trim() || !body.trim() || !user) return;
+
+    const token = await user.getIdToken();
+    await fetch(buildApiUrl('/api/community/posts'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: title.trim(),
+        body: body.trim(),
+        category,
+        tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+        isAnonymous,
+      }),
     });
+
     setTitle('');
     setBody('');
     setTags('');
     setShowPostModal(false);
+
+    const res = await fetch(buildApiUrl('/api/community/posts'));
+    const data = await res.json();
+    const list = (data?.posts || []).map((post) => {
+      const createdAt = post.createdAt ? new Date(post.createdAt) : new Date();
+      return {
+        ...post,
+        timeAgo: getTimeAgo(createdAt),
+        isNew: Date.now() - createdAt.getTime() < 86400000,
+      };
+    });
+    setPosts(list);
   };
 
   const categories = [
@@ -254,6 +278,51 @@ const Community = () => {
   const handleSaveToTimeCapsule = (thread) => {
     // Integration with Time Capsule feature
     alert(`"${thread.title}" saved to your Time Capsule! 💝`);
+  };
+
+  const handleAddReply = async () => {
+    if (!user || !selectedThread || !replyText.trim()) return;
+    const token = await user.getIdToken();
+
+    await fetch(buildApiUrl(`/api/community/posts/${selectedThread.id}/comments`), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ body: replyText.trim() }),
+    });
+
+    setReplyText('');
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === selectedThread.id
+          ? { ...post, replies: (post.replies || 0) + 1 }
+          : post
+      )
+    );
+    setSelectedThread((prev) => (prev ? { ...prev, replies: (prev.replies || 0) + 1 } : prev));
+  };
+
+  const handleLikePost = async (postId) => {
+    if (!user) return;
+    const token = await user.getIdToken();
+
+    const res = await fetch(buildApiUrl(`/api/community/posts/${postId}/like`), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data = await res.json();
+
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? { ...post, likes: Math.max(0, (post.likes || 0) + (data.liked ? 1 : -1)) }
+          : post
+      )
+    );
   };
 
   const filteredPosts = posts.filter(post => {
@@ -346,6 +415,7 @@ const Community = () => {
                     key={thread.id}
                     thread={thread}
                     onClick={() => setSelectedThread(thread)}
+                    onLike={handleLikePost}
                     onSaveToTimeCapsule={handleSaveToTimeCapsule}
                   />
                 ))}
@@ -561,7 +631,10 @@ const Community = () => {
             <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold line-clamp-1">{selectedThread.title}</h2>
               <button 
-                onClick={() => setSelectedThread(null)}
+                onClick={() => {
+                  setSelectedThread(null);
+                  setReplyText('');
+                }}
                 className="p-2 hover:bg-muted rounded-lg transition-colors"
               >
                 <Icon name="X" className="w-5 h-5" />
@@ -619,11 +692,15 @@ const Community = () => {
                 <div className="bg-muted/50 rounded-xl p-4">
                   <textarea
                     placeholder="Share your thoughts or advice..."
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
                     className="w-full bg-card border border-border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary/50 mb-3"
                     rows={3}
                   />
                   <div className="flex justify-end">
-                    <Button size="sm">Post Reply</Button>
+                    <Button size="sm" onClick={handleAddReply} disabled={!user || !replyText.trim()}>
+                      Post Reply
+                    </Button>
                   </div>
                 </div>
               </div>

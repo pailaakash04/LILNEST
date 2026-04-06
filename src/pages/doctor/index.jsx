@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
-import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
-import { db } from '../../firebase/config';
-import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useAuth } from '../../contexts/AuthContext';
+import { buildApiUrl } from '../../utils/api';
 
 const PatientCard = ({ p, onOpen }) => (
   <div className="bg-card border border-border rounded-xl p-4 shadow-soft cursor-pointer" onClick={onOpen}>
@@ -13,50 +12,45 @@ const PatientCard = ({ p, onOpen }) => (
   </div>
 );
 
-const PrescriptionForm = ({ patientId }) => {
-  const [drug, setDrug] = useState('');
-  const [dose, setDose] = useState('');
-  const [note, setNote] = useState('');
-
-  const save = async () => {
-    if (!drug || !dose) return;
-    await addDoc(collection(db, 'patients', patientId, 'prescriptions'), {
-      drug, dose, note, createdAt: serverTimestamp()
-    });
-    setDrug(''); setDose(''); setNote('');
-  };
-
-  return (
-    <div className="bg-card border border-border rounded-xl p-4 shadow-soft">
-      <div className="text-lg font-semibold mb-2">New Prescription</div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Input label="Medicine" value={drug} onChange={(e)=>setDrug(e.target.value)} />
-        <Input label="Dose" value={dose} onChange={(e)=>setDose(e.target.value)} />
-        <Input label="Notes" value={note} onChange={(e)=>setNote(e.target.value)} />
-      </div>
-      <div className="mt-3 text-right"><Button size="sm" onClick={save}>Save</Button></div>
-    </div>
-  );
-};
-
 const DoctorDashboard = () => {
   const [patients, setPatients] = useState([]);
   const [name, setName] = useState('');
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const q = query(collection(db, 'patients'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const arr = []; snap.forEach((d)=>arr.push({ id: d.id, ...d.data() })); setPatients(arr);
-    });
-    return () => unsub();
-  }, []);
+    let mounted = true;
+    const loadPatients = async () => {
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(buildApiUrl('/api/doctor/patients'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (mounted) setPatients(data?.patients || []);
+    };
+    loadPatients();
+    return () => { mounted = false; };
+  }, [user]);
 
   const addPatient = async () => {
     if (!name.trim()) return;
-    const ref = doc(collection(db, 'patients'));
-    await setDoc(ref, { name: name.trim(), risk: 'Low', createdAt: serverTimestamp() });
+    if (!user) return;
+    const token = await user.getIdToken();
+    await fetch(buildApiUrl('/api/doctor/patients'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: name.trim() }),
+    });
     setName('');
+    const res = await fetch(buildApiUrl('/api/doctor/patients'), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    setPatients(data?.patients || []);
   };
 
   return (
