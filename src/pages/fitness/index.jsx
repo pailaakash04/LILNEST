@@ -278,7 +278,7 @@ const Fitness = () => {
 
             {/* Quick Actions */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button variant="outline" className="w-full" onClick={() => alert('Hydration reminder set!')}>
+              <Button variant="outline" className="w-full" onClick={() => navigate('/wellness-actions/hydration')}>
                 <Icon name="Droplet" className="w-4 h-4 mr-2" />
                 Log Water Intake
               </Button>

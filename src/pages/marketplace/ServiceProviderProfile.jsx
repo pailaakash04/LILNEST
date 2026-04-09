@@ -51,12 +51,22 @@ const ReviewCard = ({ review }) => (
 // Booking Modal Component
 const BookingModal = ({ isOpen, onClose, provider, user }) => {
   const [step, setStep] = useState(1);
+  const [bookingError, setBookingError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
     sessionType: 'virtual',
     notes: '',
-    paymentMethod: 'card'
+    paymentMethod: 'card',
+    paymentDetails: {
+      cardName: '',
+      cardNumber: '',
+      expiry: '',
+      cvv: '',
+      upiId: '',
+      walletType: 'paytm',
+    },
   });
 
   if (!isOpen) return null;
@@ -69,33 +79,99 @@ const BookingModal = ({ isOpen, onClose, provider, user }) => {
 
   const timeSlots = ['09:00 AM', '10:30 AM', '12:00 PM', '02:00 PM', '04:00 PM', '06:00 PM'];
 
+  const to24HourTime = (timeLabel) => {
+    const [timePart, meridian] = timeLabel.split(' ');
+    let [hours, minutes] = timePart.split(':').map(Number);
+    if (meridian === 'PM' && hours !== 12) hours += 12;
+    if (meridian === 'AM' && hours === 12) hours = 0;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+  };
+
+  const paymentSummary = () => {
+    if (bookingData.paymentMethod === 'card') {
+      const last4 = bookingData.paymentDetails.cardNumber.slice(-4);
+      return last4 ? `Card ending ••••${last4}` : 'Card payment';
+    }
+    if (bookingData.paymentMethod === 'upi') {
+      return bookingData.paymentDetails.upiId ? `UPI ${bookingData.paymentDetails.upiId}` : 'UPI payment';
+    }
+    return `Wallet ${bookingData.paymentDetails.walletType}`;
+  };
+
+  const validatePayment = () => {
+    if (bookingData.paymentMethod === 'card') {
+      const { cardName, cardNumber, expiry, cvv } = bookingData.paymentDetails;
+      const cleanNumber = cardNumber.replace(/\s+/g, '');
+      if (!cardName.trim()) return 'Card holder name is required.';
+      if (!/^\d{16}$/.test(cleanNumber)) return 'Card number must be 16 digits.';
+      if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) return 'Expiry must be in MM/YY format.';
+      if (!/^\d{3,4}$/.test(cvv)) return 'CVV must be 3 or 4 digits.';
+    }
+
+    if (bookingData.paymentMethod === 'upi') {
+      const upi = bookingData.paymentDetails.upiId.trim();
+      if (!/^[\w.-]{2,}@[\w.-]{2,}$/.test(upi)) return 'Enter a valid UPI ID.';
+    }
+
+    if (bookingData.paymentMethod === 'wallet' && !bookingData.paymentDetails.walletType) {
+      return 'Choose a wallet provider.';
+    }
+
+    return '';
+  };
+
   const handleConfirmBooking = async () => {
+    setBookingError('');
+
     if (!user) {
-      alert('Please log in to book a consultation.');
+      setBookingError('Please log in to book a consultation.');
       return;
     }
 
-    const token = await user.getIdToken();
-    await fetch(buildApiUrl('/api/marketplace/bookings'), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        providerId: provider.id,
-        sessionType: bookingData.sessionType,
-        scheduledAt: `${bookingData.date}T${bookingData.time}`,
-        notes: bookingData.notes,
-        paymentMethod: bookingData.paymentMethod,
-        amount: Number(sessionTypes.find((t) => t.id === bookingData.sessionType)?.price?.replace(/[^\d.]/g, '') || 0),
-        currency: 'INR',
-      }),
-    });
+    const paymentValidationError = validatePayment();
+    if (paymentValidationError) {
+      setBookingError(paymentValidationError);
+      return;
+    }
 
-    alert('Booking confirmed! Check your email for details.');
-    onClose();
-    setStep(1);
+    setIsSubmitting(true);
+
+    try {
+      const token = await user.getIdToken();
+      const scheduledAt = `${bookingData.date}T${to24HourTime(bookingData.time)}`;
+      const amount = Number(sessionTypes.find((t) => t.id === bookingData.sessionType)?.price?.replace(/[^\d.]/g, '') || 0);
+
+      const res = await fetch(buildApiUrl('/api/marketplace/bookings'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          providerId: provider.id,
+          sessionType: bookingData.sessionType,
+          scheduledAt,
+          notes: bookingData.notes
+            ? `${bookingData.notes}\n\nPayment: ${paymentSummary()}`
+            : `Payment: ${paymentSummary()}`,
+          paymentMethod: bookingData.paymentMethod,
+          amount,
+          currency: 'INR',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setBookingError(data?.error || 'Failed to confirm booking. Please try again.');
+        return;
+      }
+
+      setBookingError('');
+      onClose();
+      setStep(1);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -288,13 +364,92 @@ const BookingModal = ({ isOpen, onClose, provider, user }) => {
                     </button>
                   ))}
                 </div>
+
+                {bookingData.paymentMethod === 'card' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={bookingData.paymentDetails.cardName}
+                      onChange={(e) => setBookingData((prev) => ({
+                        ...prev,
+                        paymentDetails: { ...prev.paymentDetails, cardName: e.target.value },
+                      }))}
+                      placeholder="Card holder name"
+                      className="px-4 py-3 bg-card border-2 border-border focus:border-primary rounded-xl outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={bookingData.paymentDetails.cardNumber}
+                      onChange={(e) => setBookingData((prev) => ({
+                        ...prev,
+                        paymentDetails: { ...prev.paymentDetails, cardNumber: e.target.value.replace(/[^\d\s]/g, '').slice(0, 19) },
+                      }))}
+                      placeholder="Card number"
+                      className="px-4 py-3 bg-card border-2 border-border focus:border-primary rounded-xl outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={bookingData.paymentDetails.expiry}
+                      onChange={(e) => setBookingData((prev) => ({
+                        ...prev,
+                        paymentDetails: { ...prev.paymentDetails, expiry: e.target.value.replace(/[^\d/]/g, '').slice(0, 5) },
+                      }))}
+                      placeholder="MM/YY"
+                      className="px-4 py-3 bg-card border-2 border-border focus:border-primary rounded-xl outline-none"
+                    />
+                    <input
+                      type="password"
+                      value={bookingData.paymentDetails.cvv}
+                      onChange={(e) => setBookingData((prev) => ({
+                        ...prev,
+                        paymentDetails: { ...prev.paymentDetails, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) },
+                      }))}
+                      placeholder="CVV"
+                      className="px-4 py-3 bg-card border-2 border-border focus:border-primary rounded-xl outline-none"
+                    />
+                  </div>
+                )}
+
+                {bookingData.paymentMethod === 'upi' && (
+                  <input
+                    type="text"
+                    value={bookingData.paymentDetails.upiId}
+                    onChange={(e) => setBookingData((prev) => ({
+                      ...prev,
+                      paymentDetails: { ...prev.paymentDetails, upiId: e.target.value.trim() },
+                    }))}
+                    placeholder="yourname@bank"
+                    className="w-full px-4 py-3 bg-card border-2 border-border focus:border-primary rounded-xl outline-none"
+                  />
+                )}
+
+                {bookingData.paymentMethod === 'wallet' && (
+                  <select
+                    value={bookingData.paymentDetails.walletType}
+                    onChange={(e) => setBookingData((prev) => ({
+                      ...prev,
+                      paymentDetails: { ...prev.paymentDetails, walletType: e.target.value },
+                    }))}
+                    className="w-full px-4 py-3 bg-card border-2 border-border focus:border-primary rounded-xl outline-none"
+                  >
+                    <option value="paytm">Paytm</option>
+                    <option value="phonepe">PhonePe</option>
+                    <option value="amazonpay">Amazon Pay</option>
+                  </select>
+                )}
+
+                {bookingError && (
+                  <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 text-sm px-4 py-3">
+                    {bookingError}
+                  </div>
+                )}
               </div>
               <div className="flex gap-3">
                 <Button onClick={() => setStep(3)} variant="outline" className="flex-1">
                   <Icon name="ArrowLeft" className="w-5 h-5 mr-2" />
                   Back
                 </Button>
-                <Button onClick={handleConfirmBooking} className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600">
+                <Button onClick={handleConfirmBooking} loading={isSubmitting} disabled={isSubmitting} className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600">
                   <Icon name="CheckCircle2" className="w-5 h-5 mr-2" />
                   Confirm Booking
                 </Button>

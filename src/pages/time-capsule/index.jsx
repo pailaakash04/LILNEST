@@ -124,6 +124,86 @@ const TemplateCard = ({ template, onClick }) => (
   </div>
 );
 
+const CapsuleDetailsModal = ({ capsule, onClose }) => {
+  if (!capsule) return null;
+
+  const media = capsule.media || [];
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      <div className="bg-background rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-primary/20">
+        <div className="sticky top-0 bg-gradient-to-r from-primary to-primary text-white p-6 rounded-t-3xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">{capsule.title}</h2>
+              <p className="text-white/80 text-sm">{capsule.unlockText}</p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+              <Icon name="X" className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="bg-card rounded-2xl border border-border p-4">
+            <h3 className="font-semibold text-foreground mb-2">Message</h3>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{capsule.description || 'No message added.'}</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="bg-card rounded-xl border border-border p-3">
+              <p className="text-muted-foreground">Created</p>
+              <p className="font-semibold text-foreground">{capsule.createdDate}</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-3">
+              <p className="text-muted-foreground">Status</p>
+              <p className="font-semibold text-foreground capitalize">{capsule.status}</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-3">
+              <p className="text-muted-foreground">Memories</p>
+              <p className="font-semibold text-foreground">{capsule.mediaCount}</p>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-foreground mb-3">Uploaded Media</h3>
+            {media.length === 0 ? (
+              <div className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
+                No media files in this capsule.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {media.map((item) => (
+                  <div key={item.id || item.storageUrl} className="rounded-xl border border-border p-3 bg-card/70">
+                    {item.type === 'image' && (
+                      <img src={item.storageUrl} alt="Capsule upload" className="w-full max-h-64 object-contain rounded-lg" />
+                    )}
+                    {item.type === 'video' && (
+                      <video controls className="w-full rounded-lg" src={item.storageUrl} />
+                    )}
+                    {item.type === 'audio' && (
+                      <audio controls className="w-full" src={item.storageUrl} />
+                    )}
+                    {!['image', 'video', 'audio'].includes(item.type) && (
+                      <a href={item.storageUrl} target="_blank" rel="noreferrer" className="text-primary underline text-sm">
+                        Open file
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Create Capsule Modal
 const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
   const defaultCapsuleData = {
@@ -609,6 +689,7 @@ const TimeCapsule = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('my-capsules');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedCapsule, setSelectedCapsule] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [myCapsules, setMyCapsules] = useState([]);
@@ -617,7 +698,11 @@ const TimeCapsule = () => {
   const mapCapsule = (capsule) => {
     const createdDate = capsule.createdAt ? new Date(capsule.createdAt) : new Date();
     const createdLabel = createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const mediaCount = capsule.media?.length || 0;
+    const media = capsule.media || [];
+    const photos = media.filter((m) => m.type === 'image').length;
+    const videos = media.filter((m) => m.type === 'video').length;
+    const audio = media.filter((m) => m.type === 'audio').length;
+    const mediaCount = media.length;
 
     let unlockText = 'Locked';
     if (capsule.status === 'editable') unlockText = 'Editable';
@@ -636,10 +721,11 @@ const TimeCapsule = () => {
       unlockText,
       unlockDate: capsule.unlockDate || null,
       status: capsule.status || 'locked',
-      photos: 0,
-      videos: 0,
-      audio: 0,
+      photos,
+      videos,
+      audio,
       mediaCount,
+      media,
     };
   };
 
@@ -874,7 +960,7 @@ const TimeCapsule = () => {
                   <CapsuleCard
                     key={capsule.id}
                     capsule={capsule}
-                    onClick={() => alert(`View capsule: ${capsule.title}`)}
+                    onClick={() => setSelectedCapsule(capsule)}
                   />
                 ))}
               </div>
@@ -1001,6 +1087,11 @@ const TimeCapsule = () => {
         template={selectedTemplate}
         user={user}
         onCreated={loadCapsules}
+      />
+
+      <CapsuleDetailsModal
+        capsule={selectedCapsule}
+        onClose={() => setSelectedCapsule(null)}
       />
     </div>
   );

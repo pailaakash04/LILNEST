@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import FoodSafetyScanner from './FoodSafetyScanner';
@@ -13,6 +14,8 @@ const Card = ({ title, desc, children }) => (
 );
 
 const Diet = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -32,7 +35,9 @@ const Diet = () => {
           </Card>
           <FoodSafetyScanner />
           <Card title="Hydration Counter" desc="Smart reminders + warm water prompts.">
-            <Button size="sm" variant="secondary" onClick={()=>alert('Reminder set!')}>Start Reminders</Button>
+            <Button size="sm" variant="secondary" onClick={() => navigate('/wellness-actions/hydration')}>
+              Start Reminders
+            </Button>
           </Card>
           <Card title="Kids Nutrition" desc="Stage-wise plans (6–9m, 1–3y, 3–8y)." />
         </div>

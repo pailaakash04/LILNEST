@@ -1,6 +1,7 @@
 import express from 'express';
 import prisma from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { defaultProviders } from '../seed/providersData.js';
 
 const router = express.Router();
 
@@ -44,6 +45,15 @@ async function logEvent(userId, action, entity, entityId, meta = null) {
   } catch {
     // no-op
   }
+}
+
+async function ensureMarketplaceProviders() {
+  const count = await prisma.marketplaceProvider.count();
+  if (count > 0) return;
+
+  await prisma.marketplaceProvider.createMany({
+    data: defaultProviders,
+  });
 }
 
 router.get('/health', (_req, res) => {
@@ -310,6 +320,8 @@ router.post('/time-capsules/:id/media', requireAuth, async (req, res) => {
 // Marketplace
 router.get('/marketplace/providers', async (_req, res) => {
   try {
+    await ensureMarketplaceProviders();
+
     const providers = await prisma.marketplaceProvider.findMany({
       orderBy: { createdAt: 'desc' },
     });
