@@ -300,7 +300,9 @@ const Marketplace = () => {
   };
 
   const allProviders = useMemo(() => {
-    return providers.map((provider) => ({
+    const sourceProviders = providers.length ? providers : MARKETPLACE_FALLBACK_PROVIDERS;
+
+    return sourceProviders.map((provider) => ({
       id: provider.id,
       name: provider.name,
       category: provider.category,
