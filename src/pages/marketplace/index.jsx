@@ -177,6 +177,65 @@ const CATEGORY_OPTIONS = [
   { id: 'physio', label: 'Physio', icon: 'Activity' },
 ];
 
+const MARKETPLACE_FALLBACK_PROVIDERS = [
+  {
+    id: 'fallback-1',
+    name: 'Dr. Aishwarya Menon',
+    category: 'Lactation Consultant',
+    rating: 4.9,
+    reviewsCount: 234,
+    location: 'Mumbai, Maharashtra',
+    priceRange: '₹1,500 - ₹2,500',
+    verified: true,
+    featured: true,
+    online: true,
+    responseTime: '~2h',
+    tags: ['IBCLC Certified', 'Home Visits'],
+  },
+  {
+    id: 'fallback-2',
+    name: 'Priya Sharma',
+    category: 'Postpartum Doula',
+    rating: 4.8,
+    reviewsCount: 189,
+    location: 'Bengaluru, Karnataka',
+    priceRange: '₹3,000 - ₹5,000',
+    verified: true,
+    featured: true,
+    online: false,
+    responseTime: '~4h',
+    tags: ['Night Care', 'Certified'],
+  },
+  {
+    id: 'fallback-3',
+    name: 'Sleep Solutions',
+    category: 'Pediatric Sleep Trainer',
+    rating: 4.7,
+    reviewsCount: 156,
+    location: 'Online',
+    priceRange: '₹2,000 - ₹4,000',
+    verified: true,
+    featured: false,
+    online: true,
+    responseTime: '~1h',
+    tags: ['Video Sessions', 'Custom Plans'],
+  },
+  {
+    id: 'fallback-4',
+    name: 'Dr. Meera Kapoor',
+    category: 'Pediatric Nutritionist',
+    rating: 4.8,
+    reviewsCount: 198,
+    location: 'Online',
+    priceRange: '₹1,200 - ₹2,800',
+    verified: true,
+    featured: true,
+    online: true,
+    responseTime: '~3h',
+    tags: ['Meal Plans', 'Weaning Support'],
+  },
+];
+
 const Marketplace = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -184,6 +243,7 @@ const Marketplace = () => {
   const [sortBy, setSortBy] = useState('recommended');
   const [loading, setLoading] = useState(true);
   const [providers, setProviders] = useState([]);
+  const [usingFallback, setUsingFallback] = useState(false);
   const [favorites, setFavorites] = useState(() => {
     const saved = localStorage.getItem('favoriteProviders');
     return saved ? JSON.parse(saved) : [];
@@ -202,11 +262,26 @@ const Marketplace = () => {
     let mounted = true;
     const loadProviders = async () => {
       setLoading(true);
-      const res = await fetch(buildApiUrl('/api/marketplace/providers'));
-      const data = await res.json();
-      if (!mounted) return;
-      setProviders(data?.providers || []);
-      setLoading(false);
+      try {
+        const res = await fetch(buildApiUrl('/api/marketplace/providers'));
+        const data = await res.json();
+        if (!mounted) return;
+
+        const apiProviders = data?.providers || [];
+        if (!res.ok || apiProviders.length === 0) {
+          setProviders(MARKETPLACE_FALLBACK_PROVIDERS);
+          setUsingFallback(true);
+        } else {
+          setProviders(apiProviders);
+          setUsingFallback(false);
+        }
+      } catch {
+        if (!mounted) return;
+        setProviders(MARKETPLACE_FALLBACK_PROVIDERS);
+        setUsingFallback(true);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     };
     loadProviders();
     return () => { mounted = false; };
@@ -459,6 +534,11 @@ const Marketplace = () => {
                 <p className="text-sm text-muted-foreground mt-1">
                   {selectedCategory !== 'all' && `in ${categories.find(c => c.id === selectedCategory)?.label}`}
                 </p>
+                {usingFallback && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    Showing backup provider list while live provider data is unavailable.
+                  </p>
+                )}
               </div>
               <div className="flex gap-3">
                 {favorites.length > 0 && (
