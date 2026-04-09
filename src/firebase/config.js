@@ -4,15 +4,14 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyD19VFRdMpUY9n5XYsXn0lfHLcF4c9iB3w",
-  authDomain: "fedf-e.firebaseapp.com",
-  projectId: "fedf-e",
-  storageBucket: "fedf-e.firebasestorage.app",
-  messagingSenderId: "924439453544",
-  appId: "1:924439453544:web:ee8118e49e40e1546700dd",
-  measurementId: "G-XDW8SXGMZL"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
@@ -29,13 +28,12 @@ try {
   db = getFirestore(app);
   googleProvider = new GoogleAuthProvider();
   storage = getStorage(app);
-  
-  // Initialize Analytics only in browser environment
-  if (typeof window !== 'undefined') {
+
+  if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
     analytics = getAnalytics(app);
   }
-  
-  console.log('✅ Firebase initialized successfully');
+
+  googleProvider.setCustomParameters({ prompt: 'select_account' });
 } catch (error) {
   console.error('❌ Firebase initialization error:', error);
 }
