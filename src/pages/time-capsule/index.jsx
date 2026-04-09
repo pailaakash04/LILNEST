@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Button from '../../components/ui/Button';
 import Icon from '../../components/AppIcon';
 import { useAuth } from '../../contexts/AuthContext';
 import { buildApiUrl } from '../../utils/api';
+import { storage } from '../../firebase/config';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 // Capsule Card Component
 const CapsuleCard = ({ capsule, onClick }) => {
@@ -124,16 +126,30 @@ const TemplateCard = ({ template, onClick }) => (
 
 // Create Capsule Modal
 const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
-  const [step, setStep] = useState(1);
-  const [capsuleData, setCapsuleData] = useState({
+  const defaultCapsuleData = {
     title: template?.title || '',
     message: '',
+    memoryType: 'letter',
     photos: [],
     videos: [],
     audio: [],
     unlockDate: '',
-    unlockType: 'age'
-  });
+    unlockType: 'age',
+  };
+
+  const [step, setStep] = useState(1);
+  const [capsuleData, setCapsuleData] = useState(defaultCapsuleData);
+  const [isCreating, setIsCreating] = useState(false);
+  const photosInputRef = useRef(null);
+  const videosInputRef = useRef(null);
+  const audioInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setStep(1);
+    setIsCreating(false);
+    setCapsuleData({ ...defaultCapsuleData, title: template?.title || '' });
+  }, [isOpen, template]);
 
   if (!isOpen) return null;
 
@@ -148,42 +164,144 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
     { id: 'custom', label: 'Custom Date', icon: 'Calendar', age: 'Custom' }
   ];
 
+  const memoryTypeOptions = [
+    {
+      id: 'letter',
+      icon: 'FileText',
+      title: 'Letter',
+      description: 'Write a heartfelt message',
+    },
+    {
+      id: 'photos',
+      icon: 'Camera',
+      title: 'Photos',
+      description: 'Capture precious moments',
+    },
+    {
+      id: 'videos',
+      icon: 'Video',
+      title: 'Video',
+      description: 'Upload a video message',
+    },
+    {
+      id: 'audio',
+      icon: 'Mic',
+      title: 'Voice Note',
+      description: 'Upload your audio note',
+    },
+  ];
+
+  const handleMediaSelect = (type, files) => {
+    if (!files?.length) return;
+
+    const selectedFiles = Array.from(files);
+    setCapsuleData((prev) => ({
+      ...prev,
+      [type]: [...prev[type], ...selectedFiles],
+    }));
+  };
+
+  const removeMediaItem = (type, index) => {
+    setCapsuleData((prev) => ({
+      ...prev,
+      [type]: prev[type].filter((_, i) => i !== index),
+    }));
+  };
+
+  const hasSelectedMemoryMedia = () => {
+    if (capsuleData.memoryType === 'photos') return capsuleData.photos.length > 0;
+    if (capsuleData.memoryType === 'videos') return capsuleData.videos.length > 0;
+    if (capsuleData.memoryType === 'audio') return capsuleData.audio.length > 0;
+    return true;
+  };
+
   const handleCreate = async () => {
     if (!user) {
       alert('Please log in to create a time capsule.');
       return;
     }
 
-    const token = await user.getIdToken();
-    const unlockType = capsuleData.unlockType === 'custom' ? 'custom' : 'age';
-
-    const res = await fetch(buildApiUrl('/api/time-capsules'), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        title: capsuleData.title,
-        message: capsuleData.message,
-        unlockType,
-        unlockDate: capsuleData.unlockDate || null,
-        meta: {
-          unlockOption: capsuleData.unlockType,
-          templateId: template?.id || null,
-        },
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data?.error || 'Failed to create capsule.');
+    if (!capsuleData.title || !capsuleData.message) {
+      alert('Please add title and message before creating the capsule.');
       return;
     }
 
-    if (onCreated) await onCreated();
-    onClose();
-    setStep(1);
+    if (!hasSelectedMemoryMedia()) {
+      alert(`Please upload at least one ${capsuleData.memoryType === 'audio' ? 'audio file' : capsuleData.memoryType.slice(0, -1)}.`);
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      const token = await user.getIdToken();
+      const unlockType = capsuleData.unlockType === 'custom' ? 'custom' : 'age';
+
+      const res = await fetch(buildApiUrl('/api/time-capsules'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: capsuleData.title,
+          message: capsuleData.message,
+          unlockType,
+          unlockDate: capsuleData.unlockDate || null,
+          meta: {
+            memoryType: capsuleData.memoryType,
+            unlockOption: capsuleData.unlockType,
+            templateId: template?.id || null,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data?.error || 'Failed to create capsule.');
+        return;
+      }
+
+      const mediaQueue = [
+        ...capsuleData.photos.map((file) => ({ file, type: 'image' })),
+        ...capsuleData.videos.map((file) => ({ file, type: 'video' })),
+        ...capsuleData.audio.map((file) => ({ file, type: 'audio' })),
+      ];
+
+      let failedUploads = 0;
+      for (const item of mediaQueue) {
+        try {
+          const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `time-capsules/${user.uid}/${data.id}/${Date.now()}-${safeName}`;
+          const fileRef = ref(storage, storagePath);
+          await uploadBytes(fileRef, item.file);
+          const downloadUrl = await getDownloadURL(fileRef);
+
+          await fetch(buildApiUrl(`/api/time-capsules/${data.id}/media`), {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              type: item.type,
+              storageUrl: downloadUrl,
+            }),
+          });
+        } catch {
+          failedUploads += 1;
+        }
+      }
+
+      if (failedUploads > 0) {
+        alert(`Capsule created, but ${failedUploads} media file(s) failed to upload.`);
+      }
+
+      if (onCreated) await onCreated();
+      onClose();
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -220,26 +338,24 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
               <div>
                 <h3 className="text-xl font-bold text-foreground mb-4">Choose Your Memory Type</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <button className="p-4 bg-primary/10 border-2 border-primary rounded-2xl text-left hover:bg-primary/20 transition-all">
-                    <Icon name="FileText" className="w-8 h-8 text-primary mb-2" />
-                    <h4 className="font-bold text-foreground">Letter</h4>
-                    <p className="text-xs text-muted-foreground">Write a heartfelt message</p>
-                  </button>
-                  <button className="p-4 bg-card border-2 border-border rounded-2xl text-left hover:border-primary/50 transition-all">
-                    <Icon name="Camera" className="w-8 h-8 text-muted-foreground mb-2" />
-                    <h4 className="font-bold text-foreground">Photos</h4>
-                    <p className="text-xs text-muted-foreground">Capture precious moments</p>
-                  </button>
-                  <button className="p-4 bg-card border-2 border-border rounded-2xl text-left hover:border-primary/50 transition-all">
-                    <Icon name="Video" className="w-8 h-8 text-muted-foreground mb-2" />
-                    <h4 className="font-bold text-foreground">Video</h4>
-                    <p className="text-xs text-muted-foreground">Record a video message</p>
-                  </button>
-                  <button className="p-4 bg-card border-2 border-border rounded-2xl text-left hover:border-primary/50 transition-all">
-                    <Icon name="Mic" className="w-8 h-8 text-muted-foreground mb-2" />
-                    <h4 className="font-bold text-foreground">Voice Note</h4>
-                    <p className="text-xs text-muted-foreground">Share your voice</p>
-                  </button>
+                  {memoryTypeOptions.map((option) => {
+                    const selected = capsuleData.memoryType === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => setCapsuleData((prev) => ({ ...prev, memoryType: option.id }))}
+                        className={`p-4 border-2 rounded-2xl text-left transition-all ${
+                          selected
+                            ? 'bg-primary/10 border-primary hover:bg-primary/20'
+                            : 'bg-card border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <Icon name={option.icon} className={`w-8 h-8 mb-2 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <h4 className="font-bold text-foreground">{option.title}</h4>
+                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <Button onClick={() => setStep(2)} className="w-full" size="lg">
@@ -253,6 +369,9 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
             <div className="space-y-6">
               <div>
                 <h3 className="text-xl font-bold text-foreground mb-4">Add Your Memory</h3>
+                <p className="text-sm text-muted-foreground mb-4 capitalize">
+                  Selected type: {capsuleData.memoryType === 'audio' ? 'voice note' : capsuleData.memoryType}
+                </p>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-2">Title</label>
@@ -275,19 +394,88 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
                   </div>
                   
                   {/* Media Upload */}
+                  <input
+                    ref={photosInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleMediaSelect('photos', e.target.files)}
+                  />
+                  <input
+                    ref={videosInputRef}
+                    type="file"
+                    accept="video/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleMediaSelect('videos', e.target.files)}
+                  />
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    accept="audio/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleMediaSelect('audio', e.target.files)}
+                  />
+
                   <div className="grid grid-cols-3 gap-3">
-                    <button className="p-4 bg-card border-2 border-dashed border-border hover:border-primary rounded-xl transition-all">
+                    <button
+                      onClick={() => photosInputRef.current?.click()}
+                      className="p-4 bg-card border-2 border-dashed border-border hover:border-primary rounded-xl transition-all"
+                    >
                       <Icon name="Image" className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">Add Photos</p>
+                      <p className="text-xs text-muted-foreground">Upload Photos</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">{capsuleData.photos.length} selected</p>
                     </button>
-                    <button className="p-4 bg-card border-2 border-dashed border-border hover:border-primary rounded-xl transition-all">
+                    <button
+                      onClick={() => videosInputRef.current?.click()}
+                      className="p-4 bg-card border-2 border-dashed border-border hover:border-primary rounded-xl transition-all"
+                    >
                       <Icon name="Video" className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">Add Video</p>
+                      <p className="text-xs text-muted-foreground">Upload Video</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">{capsuleData.videos.length} selected</p>
                     </button>
-                    <button className="p-4 bg-card border-2 border-dashed border-border hover:border-primary rounded-xl transition-all">
+                    <button
+                      onClick={() => audioInputRef.current?.click()}
+                      className="p-4 bg-card border-2 border-dashed border-border hover:border-primary rounded-xl transition-all"
+                    >
                       <Icon name="Mic" className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">Record Audio</p>
+                      <p className="text-xs text-muted-foreground">Upload Audio</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">{capsuleData.audio.length} selected</p>
                     </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {[
+                      { key: 'photos', label: 'Photos', icon: 'Image' },
+                      { key: 'videos', label: 'Videos', icon: 'Video' },
+                      { key: 'audio', label: 'Audio', icon: 'Mic' },
+                    ].map((section) => (
+                      <div key={section.key} className="rounded-xl border border-border p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Icon name={section.icon} className="w-4 h-4 text-primary" />
+                          <p className="text-sm font-semibold text-foreground">{section.label}</p>
+                        </div>
+                        {capsuleData[section.key].length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No files selected</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {capsuleData[section.key].map((file, index) => (
+                              <div key={`${section.key}-${file.name}-${index}`} className="flex items-center justify-between rounded-lg bg-card/70 px-3 py-2">
+                                <p className="text-xs text-foreground truncate pr-3">{file.name}</p>
+                                <button
+                                  onClick={() => removeMediaItem(section.key, index)}
+                                  className="text-xs text-red-500 hover:text-red-600"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -296,7 +484,7 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
                   <Icon name="ArrowLeft" className="w-5 h-5 mr-2" />
                   Back
                 </Button>
-                <Button onClick={() => setStep(3)} className="flex-1" disabled={!capsuleData.title || !capsuleData.message}>
+                <Button onClick={() => setStep(3)} className="flex-1" disabled={!capsuleData.title || !capsuleData.message || !hasSelectedMemoryMedia()}>
                   Continue
                   <Icon name="ArrowRight" className="w-5 h-5 ml-2" />
                 </Button>
@@ -372,6 +560,12 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
                       <span className="text-muted-foreground">Unlock Type</span>
                       <span className="font-semibold capitalize">{capsuleData.unlockType}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Media Files</span>
+                      <span className="font-semibold">
+                        {capsuleData.photos.length + capsuleData.videos.length + capsuleData.audio.length}
+                      </span>
+                    </div>
                     <div className="flex justify-between pt-3 border-t border-border">
                       <span className="font-bold text-foreground">Lock Status</span>
                       <span className="text-sm text-yellow-600">24-hour edit window</span>
@@ -397,7 +591,7 @@ const CreateCapsuleModal = ({ isOpen, onClose, template, user, onCreated }) => {
                   <Icon name="ArrowLeft" className="w-5 h-5 mr-2" />
                   Back
                 </Button>
-                <Button onClick={handleCreate} className="flex-1">
+                <Button onClick={handleCreate} className="flex-1" loading={isCreating} disabled={isCreating}>
                   <Icon name="Lock" className="w-5 h-5 mr-2" />
                   Create & Lock Capsule
                 </Button>
