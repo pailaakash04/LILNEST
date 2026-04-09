@@ -56,6 +56,13 @@ async function ensureMarketplaceProviders() {
   });
 }
 
+function getFallbackProviders() {
+  return defaultProviders.map((provider, index) => ({
+    id: `fallback-${index + 1}`,
+    ...provider,
+  }));
+}
+
 router.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
@@ -320,21 +327,42 @@ router.post('/time-capsules/:id/media', requireAuth, async (req, res) => {
 // Marketplace
 router.get('/marketplace/providers', async (_req, res) => {
   try {
-    await ensureMarketplaceProviders();
+    try {
+      await ensureMarketplaceProviders();
+    } catch {
+      // Fallback data will be returned below if DB is unavailable.
+    }
 
     const providers = await prisma.marketplaceProvider.findMany({
       orderBy: { createdAt: 'desc' },
     });
 
+    if (!providers.length) {
+      return res.json({ providers: getFallbackProviders() });
+    }
+
     return res.json({ providers });
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to load providers' });
+    return res.json({ providers: getFallbackProviders() });
   }
 });
 
 router.get('/marketplace/providers/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (id.startsWith('fallback-')) {
+      const fallback = getFallbackProviders().find((provider) => provider.id === id);
+      if (!fallback) return res.status(404).json({ error: 'Provider not found' });
+      return res.json({
+        provider: {
+          ...fallback,
+          services: [],
+          reviews: [],
+        },
+      });
+    }
+
     const provider = await prisma.marketplaceProvider.findUnique({
       where: { id },
       include: { services: true, reviews: { include: { user: true } } },
@@ -346,6 +374,17 @@ router.get('/marketplace/providers/:id', async (req, res) => {
 
     return res.json({ provider });
   } catch (error) {
+    const fallback = getFallbackProviders().find((provider) => provider.id === req.params.id);
+    if (fallback) {
+      return res.json({
+        provider: {
+          ...fallback,
+          services: [],
+          reviews: [],
+        },
+      });
+    }
+
     return res.status(500).json({ error: 'Failed to load provider' });
   }
 });
