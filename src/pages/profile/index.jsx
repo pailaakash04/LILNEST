@@ -32,9 +32,8 @@ const MotherTab = ({ user }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data?.profile) setForm({ ...form, ...data.profile });
+      if (data?.profile) setForm((prev) => ({ ...prev, ...data.profile }));
     })();
-    // eslint-disable-next-line
   }, [user]);
 
   const save = async () => {
@@ -93,9 +92,8 @@ const ChildTab = ({ user }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data?.profile) setForm({ ...form, ...data.profile });
+      if (data?.profile) setForm((prev) => ({ ...prev, ...data.profile }));
     })();
-    // eslint-disable-next-line
   }, [user]);
 
   const save = async () => {

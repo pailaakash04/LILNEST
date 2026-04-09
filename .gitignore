@@ -12,4 +12,39 @@ vite.config.*s.*
 .env
 .env.*
 
+# Secrets and local credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+service-account*.json
+firebase-admin*.json
+
 .vercel
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test and coverage
+coverage/
+
+# Caches
+.cache/
+.eslintcache
+.parcel-cache/
+
+# Database and prisma local files
+*.db
+*.sqlite
+*.sqlite3
+prisma/dev.db*
+
+# Misc local files
+*.backup
+*.tmp
+*.swp
