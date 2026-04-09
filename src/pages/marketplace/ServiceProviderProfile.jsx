@@ -475,11 +475,30 @@ const ServiceProviderProfile = () => {
   useEffect(() => {
     let mounted = true;
     const loadProvider = async () => {
-      const res = await fetch(buildApiUrl(`/api/marketplace/providers/${id}`));
-      const data = await res.json();
-      if (!mounted) return;
-      if (data?.provider) {
-        const mappedReviews = (data.provider.reviews || []).map((review) => {
+      try {
+        const res = await fetch(buildApiUrl(`/api/marketplace/providers/${id}`));
+        const data = await res.json();
+        if (!mounted) return;
+
+        let providerData = data?.provider;
+
+        // If fetch failed or no provider returned, show error
+        if (!providerData) {
+          console.error('Failed to load provider:', data?.error || 'Unknown error');
+          // Show error UI instead of staying in loading state
+          setProvider({
+            id: 'error',
+            name: 'Provider Not Found',
+            category: 'Unknown',
+            rating: 0,
+            reviewsCount: 0,
+            about: 'This provider could not be found. Please go back and try another provider.',
+            error: true,
+          });
+          return;
+        }
+
+        const mappedReviews = (providerData.reviews || []).map((review) => {
           const createdAt = review.createdAt ? new Date(review.createdAt) : null;
           return {
             id: review.id,
@@ -494,18 +513,18 @@ const ServiceProviderProfile = () => {
           };
         });
         setProvider({
-          ...data.provider,
-          experience: data.provider.experience || 0,
-          languages: data.provider.languages || ['English'],
-          location: data.provider.location || 'Online',
-          distance: data.provider.location || 'Online',
-          responseTime: data.provider.responseTime || '—',
-          reviews: data.provider.reviewsCount || data.provider.reviews || 0,
-          about: data.provider.about || 'Profile details will appear here.',
-          expertise: data.provider.expertise || [],
-          certifications: data.provider.certifications || [],
-          availability: data.provider.availability || {},
-          services: (data.provider.services || []).map((service) => ({
+          ...providerData,
+          experience: providerData.experience || 0,
+          languages: providerData.languages || ['English'],
+          location: providerData.location || 'Online',
+          distance: providerData.location || 'Online',
+          responseTime: providerData.responseTime || '—',
+          reviews: providerData.reviewsCount || providerData.reviews?.length || 0,
+          about: providerData.about || 'Profile details will appear here.',
+          expertise: providerData.expertise || [],
+          certifications: providerData.certifications || [],
+          availability: providerData.availability || {},
+          services: (providerData.services || []).map((service) => ({
             name: service.name,
             duration: service.durationMinutes ? `${service.durationMinutes} min` : '—',
             price: service.price ? `₹${service.price}` : '—',
@@ -513,6 +532,19 @@ const ServiceProviderProfile = () => {
           })),
         });
         setReviews(mappedReviews);
+      } catch (error) {
+        if (!mounted) return;
+        console.error('Provider fetch error:', error);
+        // Show error state instead of loading forever
+        setProvider({
+          id: 'error',
+          name: 'Connection Error',
+          category: 'Unknown',
+          rating: 0,
+          reviewsCount: 0,
+          about: 'Failed to load provider details. Please check your connection and try again.',
+          error: true,
+        });
       }
     };
     loadProvider();
@@ -526,6 +558,30 @@ const ServiceProviderProfile = () => {
         <main className="pt-20 pb-10 px-4 max-w-6xl mx-auto">
           <div className="bg-card rounded-2xl p-6 border border-border shadow-soft">
             <div className="text-sm text-muted-foreground">Loading provider profile...</div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Handle error state
+  if (provider?.error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header />
+        <main className="pt-20 pb-10 px-4 max-w-6xl mx-auto">
+          <div className="bg-card rounded-2xl p-8 border-2 border-red-500/20 shadow-lg">
+            <div className="flex items-start gap-4 mb-6">
+              <Icon name="AlertCircle" className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
+              <div>
+                <h2 className="text-lg font-bold text-foreground mb-2">{provider.name}</h2>
+                <p className="text-muted-foreground mb-6">{provider.about}</p>
+              </div>
+            </div>
+            <Button onClick={() => navigate('/marketplace')} className="w-full">
+              <Icon name="ArrowLeft" className="w-4 h-4 mr-2" />
+              Back to Marketplace
+            </Button>
           </div>
         </main>
       </div>
