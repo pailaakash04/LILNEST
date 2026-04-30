@@ -25,8 +25,12 @@ export const AuthProvider = ({ children }) => {
               'Content-Type': 'application/json',
             },
           });
-          const data = await res.json();
-          setRole(data?.role || 'mother');
+          if (res.ok) {
+            const data = await res.json();
+            setRole(data?.role || 'mother');
+          } else {
+            setRole('mother');
+          }
         } catch {
           setRole('mother');
         }
